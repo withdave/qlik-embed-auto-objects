@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <link rel="stylesheet" type="text/css" href="/styles.css" />
+    <title>@qlik/embed OAuth M2M Impersonation</title>
+    <script type="text/javascript" src="script.js"></script>
+  </head>
+  <body>
+    <div class="tippy-top">
+      <div class="top-bar">@qlik/embed OAuth M2M Impersonation</div>
+    </div>
+    <div class="main-app">
+      <div class="side-panel">
+        <ul>
+          <li>
+            <a href="#home" class="nav-link">Home</a>
+          </li>
+          <li>
+            <a href="#classicapp" class="nav-link">classic/app</a>
+          </li>
+          <li>
+            <a href="#analyticssheet" class="nav-link">analytics/sheet</a>
+          </li>
+          <li>
+            <a href="#classicchart" class="nav-link">classic/chart</a>
+          </li>
+          <li>
+            <a href="#analyticschart" class="nav-link">analytics/chart</a>
+          </li>
+          <li>
+            <a href="/logout">Log Out</a>
+          </li>
+        </ul>
+      </div>
+      <div class="content">
+        <div id="home" class="home content-item">
+          <h1>Examples</h1>
+          <p>
+            The examples in the left panel demonstrate how the @qlik/embed
+            library can be used in embedding scenarios.
+          </p>
+        </div>
+        <div id="classicapp" class="container content-item">
+          <h1>classic/app</h1>
+        </div>
+        <div id="analyticssheet" class="container content-item">
+          <h1>analytics/sheet</h1>
+        </div>
+        <div id="classicchart" class="container content-item">
+          <h1>classic/chart</h1>
+        </div>
+        <div id="analyticschart" class="container content-item">
+          <h1>analytics/chart</h1>
+        </div>
+      </div>
+    </div>
+  </body>
+
+  <script type="module">
+    // Load the sheets from the app and populate each sheet into the sheet tab
+    async function buildQlikEmbedHead() {
+      const appConfig = await getConfig();
+      const qlikEmbedScript = document.createElement("script");
+      qlikEmbedScript.setAttribute("crossorigin", "anonymous");
+      qlikEmbedScript.setAttribute("type", "application/javascript");
+      qlikEmbedScript.setAttribute(
+        "src",
+        "https://cdn.jsdelivr.net/npm/@qlik/embed-web-components",
+      );
+      qlikEmbedScript.setAttribute("data-host", appConfig.host);
+      qlikEmbedScript.setAttribute("data-client-id", appConfig.clientId);
+      qlikEmbedScript.setAttribute("data-get-access-token", "getAccessToken");
+      qlikEmbedScript.setAttribute("data-auth-type", "Oauth2");
+      await document.head.appendChild(qlikEmbedScript);
+    }
+
+    async function buildQlikEmbedBody() {
+      // Load the sheets from the app and populate each sheet into the sheet tab
+      const appConfig = await getConfig();
+      const sheetDefs = await getSheets();
+      const sheetIds = sheetDefs.map((obj) => obj.qMeta.id);
+      const objectIds = [];
+      sheetDefs.forEach((obj) => {
+        obj.qData.cells.forEach((cell) => {
+          objectIds.push(cell.name);
+        });
+      });
+      console.log("Loaded sheets: ", sheetIds);
+      console.log("Loaded charts: ", objectIds);
+
+      // Create classic/app for each sheet
+      sheetIds.forEach((sheetId) => {
+        const newElement = document.createElement("div");
+        newElement.setAttribute("class", "sheet");
+        newElement.innerHTML = `<qlik-embed
+                  ui="classic/app"
+                  app-id="${appConfig.appId}"
+                  sheet-id="${sheetId}"
+                ></qlik-embed>`;
+        document.getElementById("classicapp").appendChild(newElement);
+      });
+
+      // Create analytics/sheet for each sheet
+      sheetIds.forEach((sheetId) => {
+        const newElement = document.createElement("div");
+        newElement.setAttribute("class", "analyticssheet");
+        newElement.innerHTML = `<qlik-embed
+                  ui="analytics/sheet"
+                  app-id="${appConfig.appId}"
+                  object-id="${sheetId}"
+                ></qlik-embed>`;
+        document.getElementById("analyticssheet").appendChild(newElement);
+      });
+
+      // Create classic/chart for each object
+      objectIds.forEach((objectId) => {
+        const newElement = document.createElement("div");
+        newElement.setAttribute("class", "viz");
+        newElement.innerHTML = `<qlik-embed
+                  ui="classic/chart"
+                  app-id="${appConfig.appId}"
+                  object-id="${objectId}"
+                ></qlik-embed>`;
+        document.getElementById("classicchart").appendChild(newElement);
+      });
+
+      // Create analytics/chart chart for each object
+      objectIds.forEach((objectId) => {
+        const newElement = document.createElement("div");
+        newElement.setAttribute("class", "viz");
+        newElement.innerHTML = `<qlik-embed
+                  ui="analytics/chart"
+                  app-id="${appConfig.appId}"
+                  object-id="${objectId}"
+                ></qlik-embed>`;
+        document.getElementById("analyticschart").appendChild(newElement);
+      });
+    }
+
+    async function buildQlikEmbed() {
+      await buildQlikEmbedHead();
+      await buildQlikEmbedBody();
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      buildQlikEmbed();
+    });
+  </script>
+</html>

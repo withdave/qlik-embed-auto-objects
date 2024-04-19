@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <link rel="stylesheet" type="text/css" href="/styles.css" />
+    <title>@qlik/embed OAuth M2M Impersonation - login</title>
+  </head>
+  <body>
+    <div class="tippy-top">
+      <div class="top-bar">@qlik/embed OAuth M2M Impersonation</div>
+    </div>
+    <div class="main-app">
+      <div class="side-panel">
+        <ul>
+          <li>
+            <a href="/">Home</a>
+          </li>
+        </ul>
+      </div>
+      <div class="content">
+        <div id="home" class="home" style="margin-top: 50px; padding-top: 50px">
+          <h1>Login</h1>
+          <p>Enter your details below to log into the CRM portal.</p>
+          <form action="/login" method="post">
+            <label for="email">Email:</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value="test@test.com"
+              required
+            /><br />
+            <button type="submit">Login</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
