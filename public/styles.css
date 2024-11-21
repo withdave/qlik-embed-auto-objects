@@ -8,6 +8,16 @@
   position:relative;
 }
 
+.field {
+  width: 500px;
+  height: 250px;
+  padding: 16px;
+  border: 1px solid #bbb;
+  border-radius: 3px;
+  box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
+  position:relative;
+}
+
 .sheet {
   position: relative;
   width: 1400px;
@@ -20,6 +30,7 @@
 
 .selections-bar {
   min-height: 42px;
+  width: 1400px;
   flex: 2 0 auto;
   border: 1px solid #bbb;
   box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
@@ -28,7 +39,7 @@
 }
 
 .analyticssheet {
-  width: 1200px;
+  width: 1400px;
   height: 800px;
   border: 1px solid #bbb;
   flex: 2 0 auto;

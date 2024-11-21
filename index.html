@@ -19,6 +19,14 @@
             <a href="#home" class="nav-link">Home</a>
           </li>
           <li>
+            <a href="#analyticsselectionsbar" class="nav-link"
+              >analytics/selections</a
+            >
+          </li>
+          <li>
+            <a href="#analyticsfield" class="nav-link">analytics/field</a>
+          </li>
+          <li>
             <a href="#classicapp" class="nav-link">classic/app</a>
           </li>
           <li>
@@ -42,6 +50,12 @@
             The examples in the left panel demonstrate how the @qlik/embed
             library can be used in embedding scenarios.
           </p>
+        </div>
+        <div id="analyticsselectionsbar" class="container content-item">
+          <h1>analytics/selections</h1>
+        </div>
+        <div id="analyticsfield" class="container content-item">
+          <h1>analytics/field</h1>
         </div>
         <div id="classicapp" class="container content-item">
           <h1>classic/app</h1>
@@ -68,7 +82,7 @@
       qlikEmbedScript.setAttribute("type", "application/javascript");
       qlikEmbedScript.setAttribute(
         "src",
-        "https://cdn.jsdelivr.net/npm/@qlik/embed-web-components",
+        "https://cdn.jsdelivr.net/npm/@qlik/embed-web-components@1.2.10/dist/index.min.js",
       );
       qlikEmbedScript.setAttribute("data-host", appConfig.host);
       qlikEmbedScript.setAttribute("data-client-id", appConfig.clientId);
@@ -91,50 +105,82 @@
       console.log("Loaded sheets: ", sheetIds);
       console.log("Loaded charts: ", objectIds);
 
+      // Create a single selection bar
+      var newElement = document.createElement("div");
+      newElement.setAttribute("class", "selections-bar");
+      newElement.innerHTML = `<qlik-embed
+                ui="analytics/selections"
+                app-id="${appConfig.appId}"
+                theme="breeze"
+                language="es"
+              ></qlik-embed>`;
+      document.getElementById("analyticsselectionsbar").appendChild(newElement);
+
+      // Create a single field object
+      var newElement = document.createElement("div");
+      newElement.setAttribute("class", "field");
+      newElement.innerHTML = `<qlik-embed
+                ui="analytics/field"
+                app-id="${appConfig.appId}"
+                field-id="$Field"
+                theme="breeze"
+                language="es"
+              ></qlik-embed>`;
+      document.getElementById("analyticsfield").appendChild(newElement);
+
       // Create classic/app for each sheet
       sheetIds.forEach((sheetId) => {
-        const newElement = document.createElement("div");
+        var newElement = document.createElement("div");
         newElement.setAttribute("class", "sheet");
         newElement.innerHTML = `<qlik-embed
                   ui="classic/app"
                   app-id="${appConfig.appId}"
                   sheet-id="${sheetId}"
+                  theme="breeze"
+                  language="es"
                 ></qlik-embed>`;
         document.getElementById("classicapp").appendChild(newElement);
       });
 
       // Create analytics/sheet for each sheet
       sheetIds.forEach((sheetId) => {
-        const newElement = document.createElement("div");
+        var newElement = document.createElement("div");
         newElement.setAttribute("class", "analyticssheet");
         newElement.innerHTML = `<qlik-embed
                   ui="analytics/sheet"
                   app-id="${appConfig.appId}"
                   object-id="${sheetId}"
+                  theme="breeze"
+                  language="es"
                 ></qlik-embed>`;
         document.getElementById("analyticssheet").appendChild(newElement);
       });
 
       // Create classic/chart for each object
       objectIds.forEach((objectId) => {
-        const newElement = document.createElement("div");
+        var newElement = document.createElement("div");
         newElement.setAttribute("class", "viz");
         newElement.innerHTML = `<qlik-embed
                   ui="classic/chart"
+                  iframe="false"
                   app-id="${appConfig.appId}"
                   object-id="${objectId}"
+                  theme="breeze"
+                  language="es"
                 ></qlik-embed>`;
         document.getElementById("classicchart").appendChild(newElement);
       });
 
-      // Create analytics/chart chart for each object
+      // Create analytics/chart for each object
       objectIds.forEach((objectId) => {
-        const newElement = document.createElement("div");
+        var newElement = document.createElement("div");
         newElement.setAttribute("class", "viz");
         newElement.innerHTML = `<qlik-embed
                   ui="analytics/chart"
                   app-id="${appConfig.appId}"
                   object-id="${objectId}"
+                  theme="breeze"
+                  language="es"
                 ></qlik-embed>`;
         document.getElementById("analyticschart").appendChild(newElement);
       });
