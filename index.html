@@ -1,228 +1,285 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-    <link rel="stylesheet" type="text/css" href="/styles.css" />
-    <title>qlik-embed auto embed object loader</title>
-    <script type="text/javascript" src="script.js"></script>
-  </head>
-  <body>
-    <div class="tippy-top">
-      <div class="top-bar">qlik-embed auto embed object loader</div>
-    </div>
-    <div class="main-app">
-      <div class="side-panel">
-        <ul>
-          <li>
-            <a href="#home" class="nav-link">Home</a>
-          </li>
-          <li>
-            <a href="#analyticsselectionsbar" class="nav-link"
-              >analytics/selections</a
-            >
-          </li>
-          <li>
-            <a href="#analyticsfield" class="nav-link">analytics/field</a>
-          </li>
-          <li>
-            <a href="#classicapp" class="nav-link">classic/app</a>
-          </li>
-          <li>
-            <a href="#analyticssheet" class="nav-link">analytics/sheet</a>
-          </li>
-          <li>
-            <a href="#classicchart" class="nav-link">classic/chart</a>
-            <ul id="menuclassicchart" class="nav-sub-link">
-            </ul>
-          </li>
-          <li>
-            <a href="#analyticschart" class="nav-link">analytics/chart</a>
-            <ul id="menuanalyticschart" class="nav-sub-link">
-            </ul>
-          </li>
-          <li>
-            <a href="/logout">Log Out</a>
-          </li>
-        </ul>
-      </div>
-      <div class="content">
-        <div id="home" class="container content-item">
-          <h1>Examples</h1>
-          <p>
-            The examples in the left panel demonstrate how the @qlik/embed
-            library can be used in embedding scenarios.
-          </p>
-        </div>
-        <div id="analyticsselectionsbar" class="container content-item">
-          <h1>analytics/selections</h1>
-        </div>
-        <div id="analyticsfield" class="container content-item">
-          <h1>analytics/field</h1>
-        </div>
-        <div id="classicapp" class="container content-item">
-          <h1>classic/app</h1>
-        </div>
-        <div id="analyticssheet" class="container content-item">
-          <h1>analytics/sheet</h1>
-        </div>
-        <div id="classicchart" class="container content-item">
-          <h1>classic/chart</h1>
-        </div>
-        <div id="analyticschart" class="container content-item">
-          <h1>analytics/chart</h1>
-        </div>
-      </div>
-    </div>
-  </body>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const navLinks = document.querySelectorAll('.nav-link');
 
-      navLinks.forEach(link => {
-        link.addEventListener('click', function(event) {
-          const subMenu = this.nextElementSibling;
-          if (subMenu && subMenu.classList.contains('nav-sub-link')) {
-            event.preventDefault();
-            subMenu.style.display = subMenu.style.display === 'none' ? 'block' : 'none';
-          }
-        });
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+  <link rel="stylesheet" type="text/css" href="/styles.css" />
+  <title>qlik-embed auto embed object loader</title>
+  <script type="text/javascript" src="script.js"></script>
+</head>
+
+<body>
+  <div class="tippy-top">
+    <div class="top-bar">qlik-embed auto embed object loader</div>
+  </div>
+  <div class="main-app">
+    <div class="side-panel">
+      <ul>
+        <li>
+          <a href="#home" class="nav-link">Home</a>
+        </li>
+        <li>
+          <a href="#analyticsselections" class="nav-link">analytics/selections</a>
+        </li>
+        <li>
+          <a href="#analyticsfield" class="nav-link">analytics/field</a>
+        </li>
+        <li>
+          <a href="#classicapp" class="nav-link">classic/app</a>
+          <ul id="menuclassicapp" class="nav-sub-link">
+          </ul>
+        </li>
+        <li>
+          <a href="#analyticssheet" class="nav-link">analytics/sheet</a>
+          <ul id="menuanalyticssheet" class="nav-sub-link">
+          </ul>
+        </li>
+        <li>
+          <a href="#classicchart" class="nav-link">classic/chart</a>
+          <ul id="menuclassicchart" class="nav-sub-link">
+          </ul>
+        </li>
+        <li>
+          <a href="#analyticschart" class="nav-link">analytics/chart</a>
+          <ul id="menuanalyticschart" class="nav-sub-link">
+          </ul>
+        </li>
+        <li>
+          <a href="/logout">Log Out</a>
+        </li>
+      </ul>
+    </div>
+    <div class="content">
+      <div id="home" class="container content-item">
+        <h1>Examples</h1>
+        <p>
+          This app auto-loads all sheets and objects accessible to the user from a demo app. The latest version of this app is available at <a href="https://github.com/withdave/qlik-embed-auto-objects" target="_blank">qlik-embed-auto-objects</a>.
+        </p>
+      </div>
+      <div id="analyticsselections" class="container content-item">
+        <h1>analytics/selections</h1>
+      </div>
+      <div id="analyticsfield" class="container content-item">
+        <h1>analytics/field</h1>
+      </div>
+      <div id="classicapp" class="container content-item">
+        <h1>classic/app</h1>
+      </div>
+      <div id="analyticssheet" class="container content-item">
+        <h1>analytics/sheet</h1>
+      </div>
+      <div id="classicchart" class="container content-item">
+        <h1>classic/chart</h1>
+      </div>
+      <div id="analyticschart" class="container content-item">
+        <h1>analytics/chart</h1>
+      </div>
+    </div>
+  </div>
+</body>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const navLinks = document.querySelectorAll('.nav-link');
+
+    navLinks.forEach(link => {
+      link.addEventListener('click', function (event) {
+        const subMenu = this.nextElementSibling;
+        if (subMenu && subMenu.classList.contains('nav-sub-link')) {
+          event.preventDefault();
+          subMenu.style.display = subMenu.style.display === 'block' ? 'none' : 'block';
+        }
       });
     });
-  </script>
-  <script type="module">
+  });
+</script>
+<script type="module">
+  // Load the sheets from the app and populate each sheet into the sheet tab
+  async function buildQlikEmbedHead() {
+    const appConfig = await getConfig();
+    const qlikEmbedScript = document.createElement("script");
+    qlikEmbedScript.setAttribute("crossorigin", "anonymous");
+    qlikEmbedScript.setAttribute("type", "application/javascript");
+    qlikEmbedScript.setAttribute(
+      "src",
+      "https://cdn.jsdelivr.net/npm/@qlik/embed-web-components@1/dist/index.min.js",
+    );
+    qlikEmbedScript.setAttribute("data-host", appConfig.host);
+    qlikEmbedScript.setAttribute("data-client-id", appConfig.clientId);
+    qlikEmbedScript.setAttribute("data-get-access-token", "getAccessToken");
+    qlikEmbedScript.setAttribute("data-auth-type", "Oauth2");
+    await document.head.appendChild(qlikEmbedScript);
+  }
+
+  async function buildQlikEmbedBody() {
     // Load the sheets from the app and populate each sheet into the sheet tab
-    async function buildQlikEmbedHead() {
-      const appConfig = await getConfig();
-      const qlikEmbedScript = document.createElement("script");
-      qlikEmbedScript.setAttribute("crossorigin", "anonymous");
-      qlikEmbedScript.setAttribute("type", "application/javascript");
-      qlikEmbedScript.setAttribute(
-        "src",
-        "https://cdn.jsdelivr.net/npm/@qlik/embed-web-components@1/dist/index.min.js",
-      );
-      qlikEmbedScript.setAttribute("data-host", appConfig.host);
-      qlikEmbedScript.setAttribute("data-client-id", appConfig.clientId);
-      qlikEmbedScript.setAttribute("data-get-access-token", "getAccessToken");
-      qlikEmbedScript.setAttribute("data-auth-type", "Oauth2");
-      await document.head.appendChild(qlikEmbedScript);
-    }
-
-    async function buildQlikEmbedBody() {
-      // Load the sheets from the app and populate each sheet into the sheet tab
-      const appConfig = await getConfig();
-      const sheetDefs = await getSheets();
-      const sheetIds = sheetDefs.map((obj) => obj.qMeta.id);
-      const objects = [];
-      sheetDefs.forEach((obj) => {
-        obj.qData.cells.forEach((cell) => {
-          objects.push({ id: cell.name, type: cell.type });
-        });
+    const appConfig = await getConfig();
+    const sheetDefs = await getSheets();
+    const sheets = [];
+    sheetDefs.forEach((sheet) => {
+      sheets.push({ id: sheet.qMeta.id, name: sheet.qMeta.title });
+    });
+    const objects = [];
+    sheetDefs.forEach((obj) => {
+      obj.qData.cells.forEach((cell) => {
+        objects.push({ id: cell.name, name: cell.type });
       });
+    });
 
-      objects.sort((a, b) => a.type.localeCompare(b.type));
-      console.log("Loaded sheets: ", sheetIds);
-      console.log("Loaded charts: ", objects);
+    sheets.sort((a, b) => a.name.localeCompare(b.name));
+    objects.sort((a, b) => a.name.localeCompare(b.name));
+    console.log("Loaded sheets: ", sheets);
+    console.log("Loaded charts: ", objects);
 
-      // Create a single selection bar
-      var newElement = document.createElement("div");
-      newElement.setAttribute("class", "selections-bar");
-      newElement.innerHTML = `<qlik-embed
-                ui="analytics/selections"
+    // Create a single selection bar
+    var uiType = 'analytics/selections';
+    var uiTag = 'analyticsselections';
+    var newTitle = document.createElement("h2");
+    newTitle.setAttribute("id", `viz-${uiTag}`);
+    newTitle.setAttribute("class", "tooltip");
+    var newElement = document.createElement("div");
+    newElement.setAttribute("class", `viz-${uiTag}`);
+    var varHtml = `<qlik-embed
+                ui="${uiType}"
                 app-id="${appConfig.appId}"
                 theme="breeze"
                 language="es"
               ></qlik-embed>`;
-      document.getElementById("analyticsselectionsbar").appendChild(newElement);
+    newElement.innerHTML = varHtml;
+    newTitle.innerHTML = `${uiType}<span class="tooltiptext">${varHtml.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
+    document.getElementById(uiTag).appendChild(newTitle);
+    document.getElementById(uiTag).appendChild(newElement);
 
-      // Create a single field object
-      var newElement = document.createElement("div");
-      newElement.setAttribute("class", "field");
-      newElement.innerHTML = `<qlik-embed
-                ui="analytics/field"
+    // Create a single field object
+    var uiType = 'analytics/field';
+    var uiTag = 'analyticsfield';
+    var newTitle = document.createElement("h2");
+    newTitle.setAttribute("id", `viz-${uiTag}`);
+    newTitle.setAttribute("class", "tooltip");
+    var newElement = document.createElement("div");
+    newElement.setAttribute("class", `viz-${uiTag}`);
+    var varHtml = `<qlik-embed
+                ui="${uiType}"
                 app-id="${appConfig.appId}"
                 field-id="$Field"
                 theme="breeze"
-                language="es"
-              ></qlik-embed>`;
-      document.getElementById("analyticsfield").appendChild(newElement);
+                language="es">
+                </qlik-embed>`;
+    newElement.innerHTML = varHtml;
+    newTitle.innerHTML = `${uiType}<span class="tooltiptext">${varHtml.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
+    document.getElementById(uiTag).appendChild(newTitle);
+    document.getElementById(uiTag).appendChild(newElement);
 
-      // Create classic/app for each sheet
-      sheetIds.forEach((sheetId) => {
-        var newElement = document.createElement("div");
-        newElement.setAttribute("class", "sheet");
-        newElement.innerHTML = `<qlik-embed
-                  ui="classic/app"
+    // Create classic/app for each sheet
+    sheets.forEach((object) => {
+      var uiType = 'classic/app';
+      var uiTag = 'classicapp';
+      var newTitle = document.createElement("h2");
+      newTitle.setAttribute("id", `viz-${uiTag}-${object.id}`);
+      newTitle.setAttribute("class", "tooltip");
+      var newMenu = document.createElement("li");
+      newMenu.innerHTML = `<a href="#viz-${uiTag}-${object.id}" class="nav-link">${object.name}</a>`;
+      var newElement = document.createElement("div");
+      newElement.setAttribute("class", `viz-${uiTag}`);
+      var varHtml = `<qlik-embed
+                  ui="${uiType}"
                   app-id="${appConfig.appId}"
-                  sheet-id="${sheetId}"
+                  sheet-id="${object.id}"
                   theme="breeze"
-                  language="es"
-                ></qlik-embed>`;
-        document.getElementById("classicapp").appendChild(newElement);
-      });
-
-      // Create analytics/sheet for each sheet
-      sheetIds.forEach((sheetId) => {
-        var newElement = document.createElement("div");
-        newElement.setAttribute("class", "analyticssheet");
-        newElement.innerHTML = `<qlik-embed
-                  ui="analytics/sheet"
-                  app-id="${appConfig.appId}"
-                  object-id="${sheetId}"
-                  theme="breeze"
-                  language="es"
-                ></qlik-embed>`;
-        document.getElementById("analyticssheet").appendChild(newElement);
-      });
-
-      // Create classic/chart for each object
-      objects.forEach((object) => {
-        var newTitle = document.createElement("h2");
-        newTitle.setAttribute("id", `viz-${object.type}`);
-        newTitle.innerHTML = `classic/chart: ${object.type}`;
-        var newMenu = document.createElement("li");
-        newMenu.innerHTML = `<a href="#viz-${object.type}" class="nav-link">${object.type}</a>`;
-        var newElement = document.createElement("div");
-        newElement.setAttribute("class", "viz");
-        newElement.innerHTML = `<qlik-embed
-                  ui="classic/chart"
-                  iframe="false"
-                  app-id="${appConfig.appId}"
-                  object-id="${object.id}"
-                  theme="breeze"
-                  language="es"
-                ></qlik-embed>`;
-        document.getElementById("classicchart").appendChild(newTitle);
-        document.getElementById("classicchart").appendChild(newElement);
-        document.getElementById("menuclassicchart").appendChild(newMenu);
-      });
-
-      // Create analytics/chart for each object
-      objects.forEach((object) => {
-        var newTitle = document.createElement("h2");
-        newTitle.innerHTML = `analytics/chart: ${object.type}`;
-        var newElement = document.createElement("div");
-        newElement.setAttribute("class", "viz");
-        newElement.innerHTML = `<qlik-embed
-                  ui="analytics/chart"
-                  app-id="${appConfig.appId}"
-                  object-id="${object.id}"
-                  theme="breeze"
-                  language="es"
-                ></qlik-embed>`;
-        document.getElementById("analyticschart").appendChild(newTitle);
-        document.getElementById("analyticschart").appendChild(newElement);
-      });
-    }
-
-    async function buildQlikEmbed() {
-      await buildQlikEmbedHead();
-      await buildQlikEmbedBody();
-    }
-
-    document.addEventListener("DOMContentLoaded", async () => {
-      buildQlikEmbed();
+                  language="es">
+                  </qlik-embed>`;
+      newElement.innerHTML = varHtml;
+      newTitle.innerHTML = `${uiType}: ${object.name}<span class="tooltiptext">${varHtml.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
+      document.getElementById(uiTag).appendChild(newTitle);
+      document.getElementById(uiTag).appendChild(newElement);
+      document.getElementById(`menu${uiTag}`).appendChild(newMenu);
     });
-  </script>
+
+    // Create analytics/sheet for each sheet
+    sheets.forEach((object) => {
+      var uiType = 'analytics/sheet';
+      var uiTag = 'analyticssheet';
+      var newTitle = document.createElement("h2");
+      newTitle.setAttribute("id", `viz-${uiTag}-${object.id}`);
+      newTitle.setAttribute("class", "tooltip");
+      var newMenu = document.createElement("li");
+      newMenu.innerHTML = `<a href="#viz-${uiTag}-${object.id}" class="nav-link">${object.name}</a>`;
+      var newElement = document.createElement("div");
+      newElement.setAttribute("class", `viz-${uiTag}`);
+      var varHtml = `<qlik-embed
+                  ui="${uiType}"
+                  app-id="${appConfig.appId}"
+                  object-id="${object.id}"
+                  theme="breeze"
+                  language="es">
+                  </qlik-embed>`;
+      newElement.innerHTML = varHtml;
+      newTitle.innerHTML = `${uiType}: ${object.name}<span class="tooltiptext">${varHtml.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
+      document.getElementById(uiTag).appendChild(newTitle);
+      document.getElementById(uiTag).appendChild(newElement);
+      document.getElementById(`menu${uiTag}`).appendChild(newMenu);
+    });
+
+    // Create classic/chart for each object
+    objects.forEach((object) => {
+      var uiType = 'classic/chart';
+      var uiTag = 'classicchart';
+      var newTitle = document.createElement("h2");
+      newTitle.setAttribute("id", `viz-${uiTag}-${object.id}`);
+      newTitle.setAttribute("class", "tooltip");
+      var newMenu = document.createElement("li");
+      newMenu.innerHTML = `<a href="#viz-${uiTag}-${object.id}" class="nav-link">${object.name}</a>`;
+      var newElement = document.createElement("div");
+      newElement.setAttribute("class", `viz-${uiTag}`);
+      var varHtml = `<qlik-embed
+                  ui="${uiType}"
+                  app-id="${appConfig.appId}"
+                  object-id="${object.id}"
+                  theme="breeze"
+                  language="es">
+                  </qlik-embed>`;
+      newElement.innerHTML = varHtml;
+      newTitle.innerHTML = `${uiType}: ${object.name}<span class="tooltiptext">${varHtml.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
+      document.getElementById(uiTag).appendChild(newTitle);
+      document.getElementById(uiTag).appendChild(newElement);
+      document.getElementById(`menu${uiTag}`).appendChild(newMenu);
+    });
+
+    // Create analytics/chart for each object
+    objects.forEach((object) => {
+      var uiType = 'analytics/chart';
+      var uiTag = 'analyticschart';
+      var newTitle = document.createElement("h2");
+      newTitle.setAttribute("id", `viz-${uiTag}-${object.id}`);
+      newTitle.setAttribute("class", "tooltip");
+      var newMenu = document.createElement("li");
+      newMenu.innerHTML = `<a href="#viz-${uiTag}-${object.id}" class="nav-link">${object.name}</a>`;
+      var newElement = document.createElement("div");
+      newElement.setAttribute("class", "viz");
+      var varHtml = `<qlik-embed
+                  ui="${uiType}"
+                  app-id="${appConfig.appId}"
+                  object-id="${object.id}"
+                  theme="breeze"
+                  language="es">
+                  </qlik-embed>`;
+      newElement.innerHTML = varHtml;
+      newTitle.innerHTML = `${uiType}: ${object.name}<span class="tooltiptext">${varHtml.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
+      document.getElementById(uiTag).appendChild(newTitle);
+      document.getElementById(uiTag).appendChild(newElement);
+      document.getElementById(`menu${uiTag}`).appendChild(newMenu);
+    });
+  }
+
+  async function buildQlikEmbed() {
+    await buildQlikEmbedHead();
+    await buildQlikEmbedBody();
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    buildQlikEmbed();
+  });
+</script>
+
 </html>

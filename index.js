@@ -85,7 +85,6 @@ app.get("/", async (req, res) => {
         // We have a user, continue
         req.session.userId = currentUser.data[0].id;
       }
-      console.log("Current user ID:", req.session.userId);
       res.sendFile(join(__dirname, "index.html"));
     } else {
       res.redirect("/login");

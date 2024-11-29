@@ -1,5 +1,17 @@
-.viz {
-  width: 1400px;
+/* Core viz styling */
+
+.viz-classicapp {
+  position: relative;
+  width: 1000px;
+  height: 800px;
+  padding: 16px;
+  border: 1px solid #bbb;
+  border-radius: 3px;
+  box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
+}
+
+.viz-classicchart, .viz-analyticschart {
+  width: 1000px;
   height: 800px;
   padding: 16px;
   border: 1px solid #bbb;
@@ -8,7 +20,19 @@
   position:relative;
 }
 
-.field {
+.viz-analyticssheet {
+  width: 1000px;
+  height: 800px;
+  border: 1px solid #bbb;
+  flex: 2 0 auto;
+  border-radius: 3px;
+  box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
+  position: relative;
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+.viz-analyticsfield {
   width: 500px;
   height: 250px;
   padding: 16px;
@@ -18,36 +42,14 @@
   position:relative;
 }
 
-.sheet {
-  position: relative;
-  width: 1400px;
-  height: 800px;
-  padding: 16px;
-  border: 1px solid #bbb;
-  border-radius: 3px;
-  box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
-}
-
-.selections-bar {
+.viz-analyticsselections {
   min-height: 42px;
-  width: 1400px;
+  width: 1000px;
   flex: 2 0 auto;
   border: 1px solid #bbb;
   box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
   position: relative;
   box-sizing: border-box;
-}
-
-.analyticssheet {
-  width: 1400px;
-  height: 800px;
-  border: 1px solid #bbb;
-  flex: 2 0 auto;
-  border-radius: 3px;
-  box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
-  position: relative;
-  box-sizing: border-box;
-  overflow: auto;
 }
 
 /* App.css */
@@ -209,4 +211,44 @@ button {
 }
 button:hover {
     background-color: #0056b3;
+}
+
+
+/* Tooltip */
+/* Tooltip container */
+.tooltip {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+
+/* Tooltip text */
+.tooltip .tooltiptext {
+  visibility: hidden;
+  width: 400px;
+  background-color: #009845; /* qlik green */
+  color: white;
+  text-align: left;
+  padding: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Add shadow for depth */
+
+  /* Position the tooltip below and aligned with the left of the <h2> */
+  position: absolute;
+  top: 100%; /* Align below the h2 */
+  left: 0; /* Align with the left edge of h2 */
+  margin-top: 10px; /* Add spacing below the h2 */
+  z-index: 1;
+  opacity: 0; /* Initially hidden */
+  transition: opacity 0.3s ease, transform 0.3s ease; /* Smooth transition */
+}
+
+.tooltiptext {
+  font-size: 14px;
+}
+
+/* Show the tooltip when hovering */
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+  opacity: 1; /* Make it visible */
+  z-index: 99;
 }
