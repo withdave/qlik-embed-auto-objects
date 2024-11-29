@@ -145,7 +145,7 @@ app.post("/access-token", async (req, res) => {
   }
 });
 
-// Get access token for qlik-embed
+// Get assets in app for qlik-embed
 app.get("/assets", async (req, res) => {
   const userId = req.session.userId;
   if (typeof userId !== "undefined" && userId !== null) {
@@ -157,7 +157,7 @@ app.get("/assets", async (req, res) => {
           userId,
           scope: "user_default",
         },
-        withoutData: true,
+        withoutData: false,
       });
       // get the "qix document (qlik app)"
       const app = await appSession.getDoc();
@@ -174,7 +174,7 @@ app.get("/assets", async (req, res) => {
   }
 });
 
-// Get access token for qlik-embed
+// Get configuration for qlik-embed
 app.get("/config", async (req, res) => {
   const userId = req.session.userId;
   if (typeof userId !== "undefined" && userId !== null) {
