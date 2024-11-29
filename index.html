@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
     <link rel="stylesheet" type="text/css" href="/styles.css" />
-    <title>@qlik/embed OAuth M2M Impersonation</title>
+    <title>qlik-embed auto embed object loader</title>
     <script type="text/javascript" src="script.js"></script>
   </head>
   <body>
     <div class="tippy-top">
-      <div class="top-bar">@qlik/embed OAuth M2M Impersonation</div>
+      <div class="top-bar">qlik-embed auto embed object loader</div>
     </div>
     <div class="main-app">
       <div class="side-panel">
@@ -34,9 +34,13 @@
           </li>
           <li>
             <a href="#classicchart" class="nav-link">classic/chart</a>
+            <ul id="menuclassicchart" class="nav-sub-link">
+            </ul>
           </li>
           <li>
             <a href="#analyticschart" class="nav-link">analytics/chart</a>
+            <ul id="menuanalyticschart" class="nav-sub-link">
+            </ul>
           </li>
           <li>
             <a href="/logout">Log Out</a>
@@ -44,7 +48,7 @@
         </ul>
       </div>
       <div class="content">
-        <div id="home" class="home content-item">
+        <div id="home" class="container content-item">
           <h1>Examples</h1>
           <p>
             The examples in the left panel demonstrate how the @qlik/embed
@@ -72,7 +76,21 @@
       </div>
     </div>
   </body>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const navLinks = document.querySelectorAll('.nav-link');
 
+      navLinks.forEach(link => {
+        link.addEventListener('click', function(event) {
+          const subMenu = this.nextElementSibling;
+          if (subMenu && subMenu.classList.contains('nav-sub-link')) {
+            event.preventDefault();
+            subMenu.style.display = subMenu.style.display === 'none' ? 'block' : 'none';
+          }
+        });
+      });
+    });
+  </script>
   <script type="module">
     // Load the sheets from the app and populate each sheet into the sheet tab
     async function buildQlikEmbedHead() {
@@ -82,7 +100,7 @@
       qlikEmbedScript.setAttribute("type", "application/javascript");
       qlikEmbedScript.setAttribute(
         "src",
-        "https://cdn.jsdelivr.net/npm/@qlik/embed-web-components@1.2.10/dist/index.min.js",
+        "https://cdn.jsdelivr.net/npm/@qlik/embed-web-components@1/dist/index.min.js",
       );
       qlikEmbedScript.setAttribute("data-host", appConfig.host);
       qlikEmbedScript.setAttribute("data-client-id", appConfig.clientId);
@@ -96,14 +114,16 @@
       const appConfig = await getConfig();
       const sheetDefs = await getSheets();
       const sheetIds = sheetDefs.map((obj) => obj.qMeta.id);
-      const objectIds = [];
+      const objects = [];
       sheetDefs.forEach((obj) => {
         obj.qData.cells.forEach((cell) => {
-          objectIds.push(cell.name);
+          objects.push({ id: cell.name, type: cell.type });
         });
       });
+
+      objects.sort((a, b) => a.type.localeCompare(b.type));
       console.log("Loaded sheets: ", sheetIds);
-      console.log("Loaded charts: ", objectIds);
+      console.log("Loaded charts: ", objects);
 
       // Create a single selection bar
       var newElement = document.createElement("div");
@@ -157,31 +177,41 @@
       });
 
       // Create classic/chart for each object
-      objectIds.forEach((objectId) => {
+      objects.forEach((object) => {
+        var newTitle = document.createElement("h2");
+        newTitle.setAttribute("id", `viz-${object.type}`);
+        newTitle.innerHTML = `classic/chart: ${object.type}`;
+        var newMenu = document.createElement("li");
+        newMenu.innerHTML = `<a href="#viz-${object.type}" class="nav-link">${object.type}</a>`;
         var newElement = document.createElement("div");
         newElement.setAttribute("class", "viz");
         newElement.innerHTML = `<qlik-embed
                   ui="classic/chart"
                   iframe="false"
                   app-id="${appConfig.appId}"
-                  object-id="${objectId}"
+                  object-id="${object.id}"
                   theme="breeze"
                   language="es"
                 ></qlik-embed>`;
+        document.getElementById("classicchart").appendChild(newTitle);
         document.getElementById("classicchart").appendChild(newElement);
+        document.getElementById("menuclassicchart").appendChild(newMenu);
       });
 
       // Create analytics/chart for each object
-      objectIds.forEach((objectId) => {
+      objects.forEach((object) => {
+        var newTitle = document.createElement("h2");
+        newTitle.innerHTML = `analytics/chart: ${object.type}`;
         var newElement = document.createElement("div");
         newElement.setAttribute("class", "viz");
         newElement.innerHTML = `<qlik-embed
                   ui="analytics/chart"
                   app-id="${appConfig.appId}"
-                  object-id="${objectId}"
+                  object-id="${object.id}"
                   theme="breeze"
                   language="es"
                 ></qlik-embed>`;
+        document.getElementById("analyticschart").appendChild(newTitle);
         document.getElementById("analyticschart").appendChild(newElement);
       });
     }

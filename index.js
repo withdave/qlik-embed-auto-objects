@@ -163,8 +163,8 @@ app.get("/assets", async (req, res) => {
       const app = await appSession.getDoc();
 
       // app is now fully typed including sense-client mixins
-      const sheetlist = await app.getSheetList();
-      res.send(sheetlist);
+      const sheetList = await app.getSheetList();
+      res.send(sheetList);
     } catch (err) {
       console.log(err);
       res.status(401).send("Unable to retrieve sheet definitions.");
@@ -193,5 +193,5 @@ app.get("/config", async (req, res) => {
 // Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server is running at http://localhost:${PORT}`);
 });
