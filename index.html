@@ -256,7 +256,7 @@
       var newMenu = document.createElement("li");
       newMenu.innerHTML = `<a href="#viz-${uiTag}-${object.id}" class="nav-link">${object.name}</a>`;
       var newElement = document.createElement("div");
-      newElement.setAttribute("class", "viz");
+      newElement.setAttribute("class", `viz-${uiTag}`);
       var varHtml = `<qlik-embed
                   ui="${uiType}"
                   app-id="${appConfig.appId}"
