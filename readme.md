@@ -21,19 +21,20 @@ You should not use this example as-is. Before deploying:
 
 ## Configuration
 
-To configure this against your tenant:
+To configure this:
 
 1. Create an OAuth client in your tenant with the following properties:
   - Client type: `Web`
   - Scopes: `user_default` and `admin_classic`
-  - Allowed origins: path to your web app
+  - Allowed origins: path to your web app (by default localhost:3000)
   - Allow Machine-to-Machine (M2M): `checked`
   - Allow M2M user impersonation" `checked`
   - Once the client is created, change the consent method to `trusted`
-2. Add the relevant secrets to the app env file, or to "Secrets" if using Replit:
+2. Add the relevant secrets to a `.env` file in the root (there is a template you can copy in `template.env`):
   - `clientId`: the OAuth client ID for the client created in step 1
   - `clientSecret`: the OAuth client secret for the client created in step 1
   - `host`: the URL to the Qlik Cloud tenant hosting your app and OAuth client. In the format `https://tenant.us.qlikcloud.com`
   - `appId`: the ID of the source Qlik Sense app
+3. Run with `npm run start`
 
 Once you run the app, you will be prompted to enter an email address. Once submitted, the user will be returned (after being created if it doesn't yet exist), and you will be redirected to the home page. This page will display all of the objects in your app, multiple times per the object type definitions above.
