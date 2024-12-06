@@ -194,8 +194,8 @@ label {
     margin-bottom: 5px;
     color: #333; /* Existing style */
 }
-input {
-    width: 100%;
+.login-input {
+    width: calc(100% - 16px);
     padding: 8px;
     margin-bottom: 10px;
     border: 1px solid #ccc;
