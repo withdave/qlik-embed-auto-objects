@@ -1,5 +1,17 @@
-.viz {
-  width: 1400px;
+/* Core viz styling */
+
+.viz-classicapp {
+  position: relative;
+  width: 1000px;
+  height: 800px;
+  padding: 16px;
+  border: 1px solid #bbb;
+  border-radius: 3px;
+  box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
+}
+
+.viz-classicchart, .viz-analyticschart {
+  width: 1000px;
   height: 800px;
   padding: 16px;
   border: 1px solid #bbb;
@@ -8,7 +20,19 @@
   position:relative;
 }
 
-.field {
+.viz-analyticssheet {
+  width: 1000px;
+  height: 800px;
+  border: 1px solid #bbb;
+  flex: 2 0 auto;
+  border-radius: 3px;
+  box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
+  position: relative;
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+.viz-analyticsfield {
   width: 500px;
   height: 250px;
   padding: 16px;
@@ -18,36 +42,14 @@
   position:relative;
 }
 
-.sheet {
-  position: relative;
-  width: 1400px;
-  height: 800px;
-  padding: 16px;
-  border: 1px solid #bbb;
-  border-radius: 3px;
-  box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
-}
-
-.selections-bar {
+.viz-analyticsselections {
   min-height: 42px;
-  width: 1400px;
+  width: 1000px;
   flex: 2 0 auto;
   border: 1px solid #bbb;
   box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
   position: relative;
   box-sizing: border-box;
-}
-
-.analyticssheet {
-  width: 1400px;
-  height: 800px;
-  border: 1px solid #bbb;
-  flex: 2 0 auto;
-  border-radius: 3px;
-  box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
-  position: relative;
-  box-sizing: border-box;
-  overflow: auto;
 }
 
 /* App.css */
@@ -66,6 +68,8 @@
   flex-direction: column;
   margin-left: 220px;
   overflow:hidden;
+  height: calc(100% - 40px); /* Subtract the height of the top-bar */
+  top: 40px; /* Position below the top-bar */
 }
 
 body,
@@ -80,9 +84,6 @@ html {
   width: 100%;
 }
 
-
-
-
 .container {
   padding: 8px;
   gap: 8px;
@@ -93,7 +94,6 @@ html {
   align-items: stretch;
   box-sizing: border-box;
   margin-top: 50px;
-  padding-top: 50px;
 }
 
 #root {
@@ -116,8 +116,9 @@ html {
   position: fixed;
   flex: 0 1 auto;
   border-right: 1px solid #bbb;
-  overflow:hidden;
-  height:100%;
+  overflow-y: auto; /* Enable vertical scrolling */
+  height: calc(100% - 40px); /* Subtract the height of the top-bar */
+  top: 40px; /* Position below the top-bar */
 }
 
 .side-panel ul {
@@ -154,6 +155,8 @@ html {
   flex: 0 1 auto;
   display: flex;
   justify-content: space-between;
+  height: 40px; /* Adjust the height as needed */
+  line-height: 40px; /* Center the text vertically */
 }
 
 .sheet-drop {
@@ -167,6 +170,14 @@ a.anchor {
   position: relative;
   top: -50px;
   visibility: hidden;
+}
+
+ul.nav-sub-link li {
+  padding: 5px 0 5px 20px;
+}
+
+ul.nav-sub-link {
+  display: none;
 }
 
 /* Form */
@@ -183,8 +194,8 @@ label {
     margin-bottom: 5px;
     color: #333; /* Existing style */
 }
-input {
-    width: 100%;
+.login-input {
+    width: calc(100% - 16px);
     padding: 8px;
     margin-bottom: 10px;
     border: 1px solid #ccc;
@@ -200,4 +211,44 @@ button {
 }
 button:hover {
     background-color: #0056b3;
+}
+
+
+/* Tooltip */
+/* Tooltip container */
+.tooltip {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+
+/* Tooltip text */
+.tooltip .tooltiptext {
+  visibility: hidden;
+  width: 400px;
+  background-color: #009845; /* qlik green */
+  color: white;
+  text-align: left;
+  padding: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Add shadow for depth */
+
+  /* Position the tooltip below and aligned with the left of the <h2> */
+  position: absolute;
+  top: 100%; /* Align below the h2 */
+  left: 0; /* Align with the left edge of h2 */
+  margin-top: 10px; /* Add spacing below the h2 */
+  z-index: 1;
+  opacity: 0; /* Initially hidden */
+  transition: opacity 0.3s ease, transform 0.3s ease; /* Smooth transition */
+}
+
+.tooltiptext {
+  font-size: 14px;
+}
+
+/* Show the tooltip when hovering */
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+  opacity: 1; /* Make it visible */
+  z-index: 99;
 }
