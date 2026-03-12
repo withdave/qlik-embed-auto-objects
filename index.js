@@ -1,6 +1,9 @@
 import express from "express";
 import session from "express-session";
 import { join } from "path";
+import dotenv from "dotenv";
+
+dotenv.config({quiet: true });
 
 import {
   auth as qlikAuth,
