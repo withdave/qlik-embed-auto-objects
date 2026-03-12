@@ -41,6 +41,9 @@ qlikAuth.setDefaultHostConfig(config);
 
 const __dirname = new URL(".", import.meta.url).pathname;
 const app = express();
+
+app.set("trust proxy", 1);
+
 app.use(express.static("public"));
 app.use(express.urlencoded({ extended: true }));
 
@@ -52,7 +55,7 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: process.env.NODE_ENV === "production" ? "auto" : false,
       maxAge: 8 * 60 * 60 * 1000,
     },
   }),
