@@ -113,9 +113,9 @@ app.get("/", async (req, res) => {
       if (currentUser.data.length !== 1) {
         const currentUser = await qlikUsers.createUser(
           {
-            name: "anon_" + req.session.email,
-            email: req.session.email,
-            subject: "anon_" + req.session.email,
+            name: "oauth_gen_auto_" + req.session.email,
+            email: "oauth_gen_auto_" + req.session.email,
+            subject: "oauth_gen_auto_" + req.session.email,
             status: "active",
           },
           {
