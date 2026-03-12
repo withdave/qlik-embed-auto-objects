@@ -1,18 +1,32 @@
-// Import required modules
 import express from "express";
 import session from "express-session";
 import { join } from "path";
-import bodyParser from "body-parser";
 
 import {
   auth as qlikAuth,
   users as qlikUsers,
+  themes as qlikThemes,
   qix as openAppSession,
 } from "@qlik/api";
 
+const defaultThemes = [
+  { id: "sense", key: "sense", name: "Sense" },
+  { id: "card", key: "card", name: "Card" },
+  { id: "breeze", key: "breeze", name: "Breeze" },
+  { id: "horizon", key: "horizon", name: "Horizon" },
+];
+
+const requiredEnv = ["host", "clientId", "clientSecret", "appId", "sessionSecret"];
+const missingEnv = requiredEnv.filter((name) => !process.env[name]);
+if (missingEnv.length > 0) {
+  throw new Error(`Missing required env vars: ${missingEnv.join(", ")}`);
+}
+
+const host = process.env.host.replace(/\/+$/, "");
+
 const config = {
   authType: "oauth2",
-  host: process.env["host"],
+  host,
   clientId: process.env["clientId"],
   clientSecret: process.env["clientSecret"],
   noCache: true,
@@ -20,24 +34,25 @@ const config = {
 
 qlikAuth.setDefaultHostConfig(config);
 
-// Initialize Express app
 const __dirname = new URL(".", import.meta.url).pathname;
 const app = express();
 app.use(express.static("public"));
+app.use(express.urlencoded({ extended: true }));
 
-// Configure session middleware
 app.use(
   session({
-    secret: "secret-key",
+    secret: process.env["sessionSecret"],
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 8 * 60 * 60 * 1000,
+    },
   }),
 );
 
-// Configure body parser middleware
-app.use(bodyParser.urlencoded({ extended: true }));
-
-// Get Qlik user
 async function getQlikUser(userEmail) {
   const { data: user } = await qlikUsers.getUsers(
     {
@@ -53,18 +68,23 @@ async function getQlikUser(userEmail) {
   return user;
 }
 
-// Set up a route for the index page
+function getSessionUserId(req) {
+  return typeof req.session.userId === "string" && req.session.userId.length > 0
+    ? req.session.userId
+    : null;
+}
+
 app.get("/", async (req, res) => {
   const email = req.session.email;
+  if (!email) {
+    res.redirect("/login");
+    return;
+  }
 
-  (async () => {
-    if (email) {
-      //check to see if a matching user email exists on the tenant
+  try {
       const currentUser = await getQlikUser(email);
 
-      // If user doesn't exist, create
       if (currentUser.data.length !== 1) {
-        // We have no user, so create
         const currentUser = await qlikUsers.createUser(
           {
             name: "anon_" + req.session.email,
@@ -79,117 +99,155 @@ app.get("/", async (req, res) => {
             },
           },
         );
-        console.log("Created user: ", currentUser);
         req.session.userId = currentUser.data.id;
       } else {
-        // We have a user, continue
         req.session.userId = currentUser.data[0].id;
       }
       res.sendFile(join(__dirname, "index.html"));
-    } else {
-      res.redirect("/login");
-    }
-  })();
+  } catch (error) {
+    console.error("Failed to initialize user session", error);
+    res.status(500).send("Unable to initialize session");
+  }
 });
 
-// Set up a route to serve the login form
 app.get("/login", (req, res) => {
   res.sendFile(join(__dirname, "login.html"));
 });
 
-// Handle form submission
 app.post("/login", (req, res) => {
-  const { email } = req.body;
+  const email = req.body?.email?.trim().toLowerCase();
   if (email) {
-    // Save email to session
     req.session.email = email;
-    console.log("Logging in user:", email);
     res.redirect("/");
   } else {
-    res.send("Please provide an email.");
+    res.status(400).send("Please provide an email.");
   }
 });
 
-// Logout route
 app.get("/logout", (req, res) => {
   req.session.destroy((err) => {
     if (err) {
       console.error("Error destroying session:", err);
     }
-    console.log("Destroyed session for user.");
+    res.clearCookie("connect.sid");
     res.redirect("/login");
   });
 });
 
-// Get access token for qlik-embed
 app.post("/access-token", async (req, res) => {
-  const userId = req.session.userId;
-  if (userId.length > 0) {
-    try {
-      const accessToken = await qlikAuth.getAccessToken({
-        hostConfig: {
-          ...config,
-          userId,
-          scope: "user_default",
-        },
-      });
-      console.log("Retrieved access token for: ", userId);
-      res.send(accessToken);
-    } catch (err) {
-      console.log(err);
-      res.status(401).send("No access");
-    }
-  } else {
-    res.redirect("/login");
+  const userId = getSessionUserId(req);
+  if (!userId) {
+    res.status(401).send("Not authenticated");
+    return;
+  }
+
+  try {
+    const accessToken = await qlikAuth.getAccessToken({
+      hostConfig: {
+        ...config,
+        userId,
+        scope: "user_default",
+      },
+    });
+    res.send(accessToken);
+  } catch (err) {
+    console.error("Unable to retrieve access token", err);
+    res.status(401).send("No access");
   }
 });
 
-// Get assets in app for qlik-embed
 app.get("/assets", async (req, res) => {
-  const userId = req.session.userId;
-  if (typeof userId !== "undefined" && userId !== null) {
-    try {
-      const appSession = openAppSession.openAppSession({
-        appId: process.env["appId"],
-        hostConfig: {
-          ...config,
-          userId,
-          scope: "user_default",
-        },
-        withoutData: false,
-      });
-      // get the "qix document (qlik app)"
-      const app = await appSession.getDoc();
-
-      // app is now fully typed including sense-client mixins
-      const sheetList = await app.getSheetList();
-      res.send(sheetList);
-    } catch (err) {
-      console.log(err);
-      res.status(401).send("Unable to retrieve sheet definitions.");
-    }
-  } else {
+  const userId = getSessionUserId(req);
+  if (!userId) {
     res.redirect("/login");
+    return;
   }
-});
 
-// Get configuration for qlik-embed
-app.get("/config", async (req, res) => {
-  const userId = req.session.userId;
-  if (typeof userId !== "undefined" && userId !== null) {
-    // app is now fully typed including sense-client mixins
-    const appConfig = {
-      host: process.env["host"],
+  try {
+    const appSession = openAppSession.openAppSession({
       appId: process.env["appId"],
-      clientId: process.env["clientId"],
-    };
-    res.send(appConfig);
-  } else {
-    res.redirect("/login");
+      hostConfig: {
+        ...config,
+        userId,
+        scope: "user_default",
+      },
+      withoutData: false,
+    });
+    const app = await appSession.getDoc();
+    const sheetList = await app.getSheetList();
+    res.send(sheetList);
+  } catch (err) {
+    console.error("Unable to retrieve sheet definitions", err);
+    res.status(401).send("Unable to retrieve sheet definitions.");
   }
 });
 
-// Start the server
+app.get("/config", async (req, res) => {
+  const userId = getSessionUserId(req);
+  if (!userId) {
+    res.redirect("/login");
+    return;
+  }
+
+  const appConfig = {
+    host,
+    appId: process.env["appId"],
+    clientId: process.env["clientId"],
+  };
+  res.send(appConfig);
+});
+
+app.get("/themes", async (req, res) => {
+  const userId = getSessionUserId(req);
+  if (!userId) {
+    res.redirect("/login");
+    return;
+  }
+
+  try {
+    const response = await qlikThemes.getThemes({
+      hostConfig: {
+        ...config,
+        userId,
+        scope: "user_default",
+      },
+    });
+
+    const tenantThemeList = Array.isArray(response?.data?.data)
+      ? response.data.data
+      : [];
+
+    const liveThemes = tenantThemeList.map((theme) => ({
+      id: theme.qextFilename || theme.id,
+      name: theme.name || theme.qextFilename || theme.id,
+    }));
+
+    const mergedMap = new Map();
+    defaultThemes.forEach((theme) => mergedMap.set(theme.key, {
+      id: theme.key,
+      name: theme.name,
+    }));
+    liveThemes.forEach((theme) => {
+      if (theme.id) {
+        mergedMap.set(theme.id, theme);
+      }
+    });
+
+    const themes = Array.from(mergedMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+
+    res.send({ data: themes });
+  } catch (err) {
+    console.error("Unable to retrieve tenant themes", err);
+    res.send({ data: defaultThemes.map((theme) => ({
+        id: theme.key,
+        name: theme.name,
+      })),
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running at http://localhost:${PORT}`);
