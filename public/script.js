@@ -82,6 +82,7 @@ const DEFAULT_CONFIG = {
   iframe: false,
   interactions: { active: true, passive: true, select: true },
 };
+const DEFAULT_CONFIG_COLLAPSED = true;
 
 const state = {
   appConfig: null,
@@ -243,8 +244,8 @@ function buildShareState() {
   if (state.activeConfigItem) {
     payload.a = state.activeConfigItem;
   }
-  if (state.configCollapsed) {
-    payload.x = 1;
+  if (state.configCollapsed !== DEFAULT_CONFIG_COLLAPSED) {
+    payload.x = state.configCollapsed ? 1 : 0;
   }
 
   return payload;
@@ -256,7 +257,6 @@ function hasMeaningfulState(payload) {
     || Boolean(payload.f)
     || Boolean(payload.h && payload.h.length > 0)
     || Boolean(payload.a)
-    || Boolean(payload.x)
     || Boolean(payload.c && Object.keys(payload.c).length > 0)
   );
 }
@@ -335,8 +335,20 @@ function applyStatePayload(payload) {
     state.activeConfigItem = null;
   }
 
-  state.configCollapsed = Boolean(payload.x);
+  if (Object.prototype.hasOwnProperty.call(payload, "x")) {
+    state.configCollapsed = Boolean(payload.x);
+  } else {
+    state.configCollapsed = DEFAULT_CONFIG_COLLAPSED;
+  }
   state.isApplyingUrlState = false;
+}
+
+function handleAuthError(error) {
+  if (error?.status === 401) {
+    window.location.assign("/login");
+    return true;
+  }
+  return false;
 }
 
 async function getAccessToken() {
@@ -1217,6 +1229,9 @@ document.addEventListener("DOMContentLoaded", () => {
   updateSectionMeta();
   renderConfigPanel();
   loadAssets().catch((error) => {
+    if (handleAuthError(error)) {
+      return;
+    }
     setAssetsStatus("Failed to load assets", "error");
     console.error(error);
   });

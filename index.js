@@ -16,6 +16,8 @@ const defaultThemes = [
   { id: "horizon", key: "horizon", name: "Horizon" },
 ];
 
+const EMAIL_PATTERN = /^[^\s@"]+@[^\s@"]+\.[^\s@"]+$/;
+
 const requiredEnv = ["host", "clientId", "clientSecret", "appId", "sessionSecret"];
 const missingEnv = requiredEnv.filter((name) => !process.env[name]);
 if (missingEnv.length > 0) {
@@ -53,10 +55,28 @@ app.use(
   }),
 );
 
+function normalizeEmail(input) {
+  if (typeof input !== "string") {
+    return null;
+  }
+
+  const normalized = input.trim().toLowerCase();
+  if (!normalized || normalized.length > 320) {
+    return null;
+  }
+
+  return EMAIL_PATTERN.test(normalized) ? normalized : null;
+}
+
+function escapeQlikFilterString(value) {
+  return value.replace(/\\/g, "\\\\").replace(/\"/g, '\\"');
+}
+
 async function getQlikUser(userEmail) {
+  const safeEmail = escapeQlikFilterString(userEmail);
   const { data: user } = await qlikUsers.getUsers(
     {
-      filter: `email eq "${userEmail}"`,
+      filter: `email eq \"${safeEmail}\"`,
     },
     {
       hostConfig: {
@@ -115,12 +135,12 @@ app.get("/login", (req, res) => {
 });
 
 app.post("/login", (req, res) => {
-  const email = req.body?.email?.trim().toLowerCase();
+  const email = normalizeEmail(req.body?.email);
   if (email) {
     req.session.email = email;
     res.redirect("/");
   } else {
-    res.status(400).send("Please provide an email.");
+    res.status(400).send("Please provide a valid email.");
   }
 });
 
@@ -159,7 +179,7 @@ app.post("/access-token", async (req, res) => {
 app.get("/assets", async (req, res) => {
   const userId = getSessionUserId(req);
   if (!userId) {
-    res.redirect("/login");
+    res.status(401).json({ error: "Not authenticated" });
     return;
   }
 
@@ -185,7 +205,7 @@ app.get("/assets", async (req, res) => {
 app.get("/config", async (req, res) => {
   const userId = getSessionUserId(req);
   if (!userId) {
-    res.redirect("/login");
+    res.status(401).json({ error: "Not authenticated" });
     return;
   }
 
@@ -200,7 +220,7 @@ app.get("/config", async (req, res) => {
 app.get("/themes", async (req, res) => {
   const userId = getSessionUserId(req);
   if (!userId) {
-    res.redirect("/login");
+    res.status(401).json({ error: "Not authenticated" });
     return;
   }
 
