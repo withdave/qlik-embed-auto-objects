@@ -1,16 +1,30 @@
 {
-  "name": "nodejs",
+  "name": "qlik-embed-auto-objects",
   "version": "1.0.0",
-  "description": "",
+  "description": "Demo Express app that compares @qlik/embed UI types (classic/app, analytics/sheet, classic/chart, analytics/chart, analytics/field, analytics/selections) using OAuth M2M impersonation and per-session synthetic Qlik users.",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": [
+    "qlik",
+    "qlik-cloud",
+    "qlik-embed",
+    "@qlik/embed",
+    "embed",
+    "oauth",
+    "impersonation",
+    "analytics",
+    "demo"
+  ],
   "author": "",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/withdave/qlik-embed-auto-objects.git"
+  },
   "dependencies": {
     "@qlik/api": "^0.2.1",
     "@types/node": "^18.0.6",
