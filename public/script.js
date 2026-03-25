@@ -84,6 +84,14 @@ const DEFAULT_CONFIG = {
 };
 const DEFAULT_CONFIG_COLLAPSED = true;
 
+function getDefaultPreviewForItemId(itemId) {
+  const sectionId = itemId.split("::")[0];
+  if (sectionId === "analyticssheet" || sectionId === "analyticschart") {
+    return true;
+  }
+  return DEFAULT_CONFIG.preview;
+}
+
 const state = {
   appConfig: null,
   assets: { sheets: [], objects: [] },
@@ -163,7 +171,7 @@ function decodeState(encoded) {
   return JSON.parse(json);
 }
 
-function compactConfig(config) {
+function compactConfig(config, itemId) {
   const compact = {};
   if (config.theme !== DEFAULT_CONFIG.theme) {
     compact.t = config.theme;
@@ -174,7 +182,7 @@ function compactConfig(config) {
   if (config.identity !== DEFAULT_CONFIG.identity) {
     compact.i = config.identity;
   }
-  if (config.preview !== DEFAULT_CONFIG.preview) {
+  if (config.preview !== getDefaultPreviewForItemId(itemId)) {
     compact.p = config.preview;
   }
   if (config.iframe !== DEFAULT_CONFIG.iframe) {
@@ -238,7 +246,7 @@ function buildShareState() {
     if (!state.configs.has(itemId)) {
       return;
     }
-    const compact = compactConfig(state.configs.get(itemId));
+    const compact = compactConfig(state.configs.get(itemId), itemId);
     if (Object.keys(compact).length > 0) {
       configs[itemId] = compact;
     }
@@ -637,7 +645,7 @@ function getItemConfig(itemId) {
       theme: DEFAULT_CONFIG.theme,
       language: DEFAULT_CONFIG.language,
       identity: DEFAULT_CONFIG.identity,
-      preview: DEFAULT_CONFIG.preview,
+      preview: getDefaultPreviewForItemId(itemId),
       iframe: DEFAULT_CONFIG.iframe,
       interactions: { ...DEFAULT_CONFIG.interactions },
     });
