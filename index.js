@@ -1,10 +1,12 @@
 import express from "express";
+import helmet from "helmet";
 import session from "express-session";
-import { join } from "path";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { randomBytes } from "crypto";
 import dotenv from "dotenv";
 
-dotenv.config({quiet: true });
+dotenv.config({ quiet: true });
 
 import {
   auth as qlikAuth,
@@ -41,10 +43,56 @@ const config = {
 
 qlikAuth.setDefaultHostConfig(config);
 
-const __dirname = new URL(".", import.meta.url).pathname;
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.set("trust proxy", 1);
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  }),
+);
+
+/** Simple sliding-window rate limiter (per IP, in-memory). */
+const rateBuckets = new Map();
+function rateLimit({ windowMs, max, keyPrefix, onLimit }) {
+  return (req, res, next) => {
+    const ip = req.ip || req.socket?.remoteAddress || "unknown";
+    const key = `${keyPrefix}:${ip}`;
+    const now = Date.now();
+    let bucket = rateBuckets.get(key);
+    if (!bucket || now - bucket.start >= windowMs) {
+      bucket = { start: now, count: 0 };
+      rateBuckets.set(key, bucket);
+    }
+    bucket.count += 1;
+    if (bucket.count > max) {
+      if (typeof onLimit === "function") {
+        onLimit(req, res);
+        return;
+      }
+      res.status(429).json({ error: "Too many requests" });
+      return;
+    }
+    next();
+  };
+}
+
+const limitSessionRotate = rateLimit({ windowMs: 60_000, max: 30, keyPrefix: "rotate" });
+const limitAccessToken = rateLimit({ windowMs: 60_000, max: 200, keyPrefix: "token" });
+/** Limits session provisioning on first page load (Qlik user creation cost). */
+const limitHomeProvision = rateLimit({
+  windowMs: 60_000,
+  max: 90,
+  keyPrefix: "home",
+  onLimit: (req, res) => {
+    res.status(429).type("html").send(
+      "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Too many requests</title></head>"
+        + "<body><p>Too many requests. Please try again in a minute.</p></body></html>",
+    );
+  },
+});
 
 app.use(express.static("public"));
 app.use(express.urlencoded({ extended: true }));
@@ -57,7 +105,7 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production" ? "auto" : false,
+      secure: process.env.NODE_ENV === "production",
       maxAge: 8 * 60 * 60 * 1000,
     },
   }),
@@ -187,7 +235,7 @@ function getSessionUserId(req) {
     : null;
 }
 
-app.get("/", async (req, res) => {
+app.get("/", limitHomeProvision, async (req, res) => {
   try {
     const result = await provisionSessionUser(req);
     if (!result.ok) {
@@ -210,7 +258,7 @@ app.post("/login", (req, res) => {
   res.redirect(302, "/");
 });
 
-app.post("/session/rotate", async (req, res) => {
+app.post("/session/rotate", limitSessionRotate, async (req, res) => {
   delete req.session.userId;
   req.session.embedKey = randomEmbedKey();
   try {
@@ -226,20 +274,29 @@ app.post("/session/rotate", async (req, res) => {
   }
 });
 
-app.get("/logout", (req, res) => {
+function destroySessionAndRedirect(req, res) {
   req.session.destroy((err) => {
     if (err) {
       console.error("Error destroying session:", err);
     }
     res.clearCookie("connect.sid");
-    res.redirect("/");
+    res.redirect(303, "/");
   });
+}
+
+app.get("/logout", (req, res) => {
+  res.status(405).set("Allow", "POST").type("html").send(
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Method not allowed</title></head>"
+      + "<body><p>Logout must use POST. Use <strong>Clear session</strong> in the app bar.</p></body></html>",
+  );
 });
 
-app.post("/access-token", async (req, res) => {
+app.post("/logout", destroySessionAndRedirect);
+
+app.post("/access-token", limitAccessToken, async (req, res) => {
   const userId = getSessionUserId(req);
   if (!userId) {
-    res.status(401).send("Not authenticated");
+    res.status(401).json({ error: "Not authenticated" });
     return;
   }
 
@@ -254,7 +311,8 @@ app.post("/access-token", async (req, res) => {
     res.send(accessToken);
   } catch (err) {
     console.error("Unable to retrieve access token", err);
-    res.status(401).send("No access");
+    const status = err?.statusCode === 401 || err?.status === 401 ? 401 : 502;
+    res.status(status).json({ error: "Unable to retrieve access token" });
   }
 });
 
@@ -280,7 +338,12 @@ app.get("/assets", async (req, res) => {
     res.send(sheetList);
   } catch (err) {
     console.error("Unable to retrieve sheet definitions", err);
-    res.status(401).send("Unable to retrieve sheet definitions.");
+    const unauthorized =
+      err?.statusCode === 401
+      || err?.status === 401
+      || /401|unauthoriz/i.test(String(err?.message || ""));
+    const status = unauthorized ? 401 : 502;
+    res.status(status).json({ error: "Unable to retrieve sheet definitions" });
   }
 });
 

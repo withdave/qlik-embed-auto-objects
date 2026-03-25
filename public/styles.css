@@ -62,16 +62,78 @@ html {
   gap: 16px;
 }
 
-.top-bar__link {
-  color: #effcf7;
-  text-decoration: none;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+.top-bar__form {
+  display: inline;
+  margin: 0;
 }
 
-.top-bar__link:hover {
-  color: #b8f0d2;
+.top-bar__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  line-height: 1.2;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(239, 252, 247, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+  color: #effcf7;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.top-bar__chip:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(239, 252, 247, 0.5);
+  color: #ffffff;
+}
+
+.top-bar__chip--external {
+  border-color: rgba(120, 190, 255, 0.45);
+  background: rgba(4, 105, 177, 0.28);
+  color: #e8f6ff;
+}
+
+.top-bar__chip--external:hover {
+  background: rgba(4, 105, 177, 0.45);
+  border-color: rgba(160, 210, 255, 0.65);
+  color: #ffffff;
+}
+
+.top-bar__chip--danger {
+  border-color: rgba(255, 130, 120, 0.5);
+  background: rgba(176, 76, 61, 0.38);
+  color: #ffe8e6;
+}
+
+.top-bar__chip--danger:hover {
+  background: rgba(200, 70, 58, 0.55);
+  border-color: rgba(255, 160, 150, 0.75);
+  color: #ffffff;
+}
+
+.top-bar__external-icon {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  opacity: 0.95;
+}
+
+.top-bar__form button.top-bar__chip {
+  margin: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  color: inherit;
 }
 
 .main-app {
@@ -135,6 +197,18 @@ html {
   color: #b04c3d;
 }
 
+.assets-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+}
+
+.assets-status-row .panel-note {
+  flex: 1;
+  min-width: 0;
+}
+
 .panel-button {
   border: none;
   border-radius: var(--radius-xs);
@@ -175,38 +249,6 @@ html {
 
 .main-app.config-collapsed {
   grid-template-columns: minmax(260px, 320px) 1fr;
-}
-
-.reopen-config {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 8;
-  border: 1px solid rgba(4, 105, 177, 0.35);
-  border-radius: 999px;
-  background: #eaf4fb;
-  color: var(--brand-blue-dark);
-  padding: 9px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  cursor: pointer;
-  box-shadow: 0 8px 20px rgba(4, 105, 177, 0.18);
-  opacity: 0;
-  transform: translateY(12px);
-  pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.reopen-config.visible {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-
-.reopen-config:hover {
-  background: var(--brand-blue);
-  color: #ffffff;
 }
 
 .panel-button.ghost {
@@ -338,19 +380,8 @@ html {
   cursor: pointer;
 }
 
-.section-item__action {
-  border: 1px solid rgba(0, 152, 69, 0.3);
-  background: #eef9f3;
-  color: var(--accent-dark);
-  font-size: 12px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 999px;
-}
-
-.section-item__action:hover {
-  background: var(--accent);
-  color: #ffffff;
+.section-item .config-icon-btn {
+  align-self: center;
 }
 
 .config-body {
@@ -491,6 +522,69 @@ html {
   color: var(--muted);
 }
 
+.embed-card__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.config-icon-btn {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(0, 152, 69, 0.35);
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--accent-dark);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.config-icon-btn__svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+.config-icon-btn:hover {
+  background: rgba(0, 152, 69, 0.12);
+  border-color: var(--accent);
+}
+
+.config-icon-btn.is-active {
+  background: rgba(0, 152, 69, 0.2);
+  border-color: var(--accent);
+}
+
+.embed-card__remove {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0 6px;
+  min-width: 28px;
+  height: 28px;
+  border: 1px solid rgba(0, 152, 69, 0.35);
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--accent-dark);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.embed-card__remove:hover {
+  background: rgba(176, 76, 61, 0.1);
+  border-color: rgba(176, 76, 61, 0.45);
+  color: #b04c3d;
+}
+
 .embed-card__action {
   border: 1px solid rgba(0, 152, 69, 0.3);
   background: #eef9f3;
@@ -561,13 +655,22 @@ html {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: flex-start;
 }
 
 .shortcuts-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   border: 1px solid var(--panel-border);
   border-radius: var(--radius-sm);
   padding: 14px;
   background: #fbfdfc;
+}
+
+.shortcuts-panel .section-header {
+  margin-bottom: 0;
+  flex-shrink: 0;
 }
 
 .jump-link {
@@ -588,6 +691,50 @@ html {
   color: var(--brand-blue-dark);
   background: #eef6fc;
   border-color: rgba(4, 105, 177, 0.28);
+}
+
+.jump-chip-row {
+  display: inline-flex;
+  align-items: stretch;
+  max-width: 100%;
+  border-radius: 999px;
+  border: 1px solid rgba(4, 105, 177, 0.28);
+  background: #eef6fc;
+  overflow: hidden;
+}
+
+.jump-chip-row .jump-link--item {
+  border: none;
+  border-radius: 0;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.jump-chip-row .jump-link--item:hover {
+  color: #ffffff;
+  background: var(--brand-blue);
+  border-color: transparent;
+}
+
+.jump-chip-remove {
+  flex-shrink: 0;
+  align-self: stretch;
+  margin: 0;
+  padding: 0 10px;
+  border: none;
+  border-left: 1px solid rgba(4, 105, 177, 0.2);
+  background: rgba(255, 255, 255, 0.35);
+  color: var(--brand-blue-dark);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.jump-chip-remove:hover {
+  background: rgba(176, 76, 61, 0.12);
+  color: #b04c3d;
 }
 
 .jump-link:hover {
@@ -626,7 +773,7 @@ html {
 
 }
 
-form {
+form:not(.top-bar__form) {
   margin-top: 20px;
   padding: 15px;
   border: 1px solid var(--panel-border);
@@ -648,7 +795,7 @@ label {
   border-radius: var(--radius-xs);
 }
 
-form button {
+form:not(.top-bar__form) button {
   padding: 8px 15px;
   background-color: var(--brand-blue);
   color: white;
@@ -657,7 +804,7 @@ form button {
   cursor: pointer;
 }
 
-form button:hover {
+form:not(.top-bar__form) button:hover {
   background-color: var(--brand-blue-dark);
 }
 

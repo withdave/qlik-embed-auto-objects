@@ -14,8 +14,33 @@
     <div class="top-bar">
       <div class="top-bar__title">@qlik/embed chart explorer</div>
       <div class="top-bar__actions">
-        <a class="top-bar__link" href="https://github.com/withdave/qlik-embed-auto-objects" target="_blank">GitHub</a>
-        <a class="top-bar__link" href="/logout">Clear session</a>
+        <a
+          class="top-bar__chip top-bar__chip--external"
+          href="https://github.com/withdave/qlik-embed-auto-objects"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="GitHub repository (opens in new tab)"
+        >
+          GitHub
+          <svg
+            class="top-bar__external-icon"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </a>
+        <form class="top-bar__form" method="post" action="/logout">
+          <button class="top-bar__chip top-bar__chip--danger" type="submit">Clear session</button>
+        </form>
       </div>
     </div>
   </div>
@@ -23,7 +48,10 @@
     <aside class="control-panel">
       <div class="panel-section">
         <div class="panel-title">Selections</div>
-        <div class="panel-note" id="assets-status">Loading app assets...</div>
+        <div class="assets-status-row">
+          <div class="panel-note" id="assets-status">Loading app assets...</div>
+          <button type="button" id="assets-retry" class="panel-button ghost" hidden>Retry</button>
+        </div>
       </div>
       <div class="panel-section">
         <div class="panel-title">Filter</div>
@@ -113,7 +141,6 @@
       </section>
     </main>
   </div>
-  <button id="reopen-config" class="reopen-config" type="button" aria-label="Show configuration panel">Configuration hidden - show</button>
 </body>
 <script type="module" src="/script.js"></script>
 
