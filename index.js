@@ -95,7 +95,6 @@ const limitHomeProvision = rateLimit({
 });
 
 app.use(express.static("public"));
-app.use(express.urlencoded({ extended: true }));
 
 app.use(
   session({
@@ -248,14 +247,6 @@ app.get("/", limitHomeProvision, async (req, res) => {
     console.error("Failed to initialize user session", error);
     res.status(500).send("Unable to initialize session");
   }
-});
-
-app.get("/login", (req, res) => {
-  res.redirect(302, "/");
-});
-
-app.post("/login", (req, res) => {
-  res.redirect(302, "/");
 });
 
 app.post("/session/rotate", limitSessionRotate, async (req, res) => {
