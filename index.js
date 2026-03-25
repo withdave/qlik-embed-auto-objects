@@ -48,22 +48,94 @@ const app = express();
 
 app.set("trust proxy", 1);
 
+/** Qlik Cloud tenant + jsDelivr + QMFE; host allowlists below; unsafe-* only where Qlik runtime requires it. */
+function buildContentSecurityPolicy() {
+  const hostForUrl = /^https?:\/\//i.test(host) ? host : `https://${host}`;
+  let tenantOrigin;
+  let tenantHost = "";
+  try {
+    const tenantUrl = new URL(hostForUrl);
+    tenantOrigin = tenantUrl.origin;
+    tenantHost = tenantUrl.hostname;
+  } catch {
+    tenantOrigin = host;
+  }
+  // CSP: `https://tenant` does not allow `wss://tenant`; list both for engine WebSockets.
+  const tenantWss = tenantHost ? `wss://${tenantHost}` : "";
+  const jsdelivr = "https://cdn.jsdelivr.net";
+  /** Qlik Cloud federation CDN: import map + dynamic chunks (see QMFE / @qlik/embed-web-components). */
+  const qlikGlobalCdn = "https://cdn.qlikcloud.com";
+  /** Qlik Cloud uses LaunchDarkly for feature flags (e.g. /sdk/goals). */
+  const launchDarkly = [
+    "https://app.launchdarkly.com",
+    "https://clientstream.launchdarkly.com",
+    "https://events.launchdarkly.com",
+  ];
+  /** QMFE usage metrics / Elastic Hub credentials (sqs-proxy). */
+  const qlikDataEngineeringApi = "https://api.qlikdataengineering.com";
+  return {
+    directives: {
+      defaultSrc: ["'self'"],
+      // Sense/QMFE client calls `new Function()` (e.g. extension APIs); without 'unsafe-eval' the embed throws EvalError.
+      scriptSrc: ["'self'", "'unsafe-eval'", jsdelivr, qlikGlobalCdn, tenantOrigin],
+      // Qlik embed web components apply inline styles to rendered charts.
+      styleSrc: ["'self'", "'unsafe-inline'", jsdelivr, qlikGlobalCdn, tenantOrigin],
+      imgSrc: ["'self'", "data:", "blob:", tenantOrigin, qlikGlobalCdn],
+      fontSrc: ["'self'", "data:", tenantOrigin, qlikGlobalCdn],
+      connectSrc: [
+        "'self'",
+        jsdelivr,
+        qlikGlobalCdn,
+        qlikDataEngineeringApi,
+        tenantOrigin,
+        tenantWss,
+        ...launchDarkly,
+      ].filter(Boolean),
+      frameSrc: ["'self'", tenantOrigin],
+      workerSrc: ["'self'", "blob:"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+    },
+  };
+}
+
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: buildContentSecurityPolicy(),
   }),
 );
 
 /** Simple sliding-window rate limiter (per IP, in-memory). */
 const rateBuckets = new Map();
+/** Evict entries whose window has ended (no recent activity still holds the key). */
+const RATE_BUCKET_MAX_ENTRIES = 5000;
+const RATE_PRUNE_INTERVAL_MS = 60_000;
+
+function pruneStaleRateBuckets(now = Date.now()) {
+  for (const [key, bucket] of rateBuckets) {
+    if (now - bucket.start >= bucket.windowMs) {
+      rateBuckets.delete(key);
+    }
+  }
+}
+
+setInterval(() => {
+  pruneStaleRateBuckets();
+}, RATE_PRUNE_INTERVAL_MS).unref?.();
+
 function rateLimit({ windowMs, max, keyPrefix, onLimit }) {
   return (req, res, next) => {
     const ip = req.ip || req.socket?.remoteAddress || "unknown";
     const key = `${keyPrefix}:${ip}`;
     const now = Date.now();
+    if (rateBuckets.size > RATE_BUCKET_MAX_ENTRIES) {
+      pruneStaleRateBuckets(now);
+    }
     let bucket = rateBuckets.get(key);
     if (!bucket || now - bucket.start >= windowMs) {
-      bucket = { start: now, count: 0 };
+      bucket = { start: now, count: 0, windowMs };
       rateBuckets.set(key, bucket);
     }
     bucket.count += 1;
