@@ -97,6 +97,8 @@ const state = {
   collapsedSections: new Set(),
   pendingUrlState: null,
   isApplyingUrlState: false,
+  /** Bumps qlik-embed `identity` to force a new engine session without a full reload. */
+  connectionIdentityBump: 0,
 };
 
 const dom = {};
@@ -343,28 +345,76 @@ function applyStatePayload(payload) {
   state.isApplyingUrlState = false;
 }
 
-function handleAuthError(error) {
-  if (error?.status === 401) {
-    window.location.assign("/login");
-    return true;
-  }
-  return false;
-}
-
-async function getAccessToken() {
-  const response = await fetch("/access-token", {
+async function rotateServerSession() {
+  const response = await fetch("/session/rotate", {
     method: "POST",
     credentials: "include",
     mode: "same-origin",
     redirect: "follow",
   });
+  return response.ok;
+}
+
+async function recoverSessionAndReload() {
+  await rotateServerSession();
+  window.location.reload();
+}
+
+function handleAuthError(error) {
+  if (error?.status === 401) {
+    recoverSessionAndReload();
+    return true;
+  }
+  return false;
+}
+
+function bumpConnectionIdentity() {
+  state.connectionIdentityBump += 1;
+  Array.from(state.selected).forEach((itemId) => {
+    rerenderItem(itemId);
+  });
+}
+
+async function getAccessToken() {
+  const fetchToken = () =>
+    fetch("/access-token", {
+      method: "POST",
+      credentials: "include",
+      mode: "same-origin",
+      redirect: "follow",
+    });
+
+  let response = await fetchToken();
+  if (response.status === 401) {
+    const rotated = await rotateServerSession();
+    if (rotated) {
+      await refreshAppConfig();
+      state.connectionIdentityBump = 0;
+      Array.from(state.selected).forEach((itemId) => {
+        rerenderItem(itemId);
+      });
+      response = await fetchToken();
+    }
+  }
   if (response.status === 200) {
     return response.text();
+  }
+  if (response.status === 401) {
+    if (state.connectionIdentityBump < 2) {
+      bumpConnectionIdentity();
+      response = await fetchToken();
+      if (response.status === 200) {
+        return response.text();
+      }
+    }
+    await recoverSessionAndReload();
+    throw await buildError(response, "Session recovery in progress");
   }
   throw await buildError(response, "Unexpected serverside authentication error");
 }
 
 window.getAccessToken = getAccessToken;
+window.bumpQlikEmbedConnectionIdentity = bumpConnectionIdentity;
 
 async function getSheets() {
   const response = await fetch("/assets", {
@@ -390,6 +440,16 @@ async function getConfig() {
     return response.json();
   }
   throw await buildError(response, "Unexpected error");
+}
+
+async function refreshAppConfig() {
+  try {
+    const next = await getConfig();
+    state.appConfig = state.appConfig ? { ...state.appConfig, ...next } : next;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function getThemes() {
@@ -612,7 +672,7 @@ function renderSectionsList() {
 
     const meta = document.createElement("div");
     meta.className = "section-group__meta";
-    meta.textContent = `${selectedVisibleCount} selected of ${sectionItems.length}`;
+    meta.textContent = `${selectedVisibleCount}/${sectionItems.length}`;
 
     const toggleSelection = document.createElement("button");
     toggleSelection.type = "button";
@@ -708,12 +768,15 @@ function toggleSectionCollapsed(sectionId) {
 
 function updateSectionMeta() {
   UI_DEFINITIONS.forEach((section) => {
+    const sectionItems = Array.from(state.items.values()).filter(
+      (item) => item.sectionId === section.id,
+    );
     const count = Array.from(state.selected).filter((itemId) =>
       itemId.startsWith(`${section.id}::`),
     ).length;
     const meta = document.getElementById(`meta-${section.id}`);
     if (meta) {
-      meta.textContent = `${count} selected`;
+      meta.textContent = `${count}/${sectionItems.length}`;
     }
   });
   updateEmptyState();
@@ -841,8 +904,15 @@ function createEmbedNode(item) {
   if (config.language) {
     embed.setAttribute("language", config.language);
   }
-  if (config.identity) {
-    embed.setAttribute("identity", config.identity);
+  const sessionIdentity = state.appConfig?.sessionIdentity || "";
+  let identity = config.identity || sessionIdentity;
+  if (state.connectionIdentityBump > 0) {
+    identity = identity
+      ? `${identity}-r${state.connectionIdentityBump}`
+      : `r${state.connectionIdentityBump}`;
+  }
+  if (identity) {
+    embed.setAttribute("identity", identity);
   }
   if (typeof config.preview === "boolean" && supportsParam(item.ui, "preview")) {
     embed.setAttribute("preview", String(config.preview));
@@ -1220,6 +1290,21 @@ function bindEvents() {
     clearSelections();
   });
 }
+
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event.reason;
+  if (!reason || typeof reason !== "object") {
+    return;
+  }
+  if (reason.status !== 401) {
+    return;
+  }
+  if (state.connectionIdentityBump < 3) {
+    bumpConnectionIdentity();
+  } else {
+    recoverSessionAndReload();
+  }
+});
 
 document.addEventListener("DOMContentLoaded", () => {
   state.pendingUrlState = parseStateFromUrl();

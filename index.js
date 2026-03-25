@@ -1,6 +1,7 @@
 import express from "express";
 import session from "express-session";
 import { join } from "path";
+import { randomBytes } from "crypto";
 import dotenv from "dotenv";
 
 dotenv.config({quiet: true });
@@ -19,7 +20,8 @@ const defaultThemes = [
   { id: "horizon", key: "horizon", name: "Horizon" },
 ];
 
-const EMAIL_PATTERN = /^[^\s@"]+@[^\s@"]+\.[^\s@"]+$/;
+/** Server-side user API calls; frontend embed tokens still use `user_default` only. */
+const BACKEND_USER_SCOPE = "admin_classic user_default";
 
 const requiredEnv = ["host", "clientId", "clientSecret", "appId", "sessionSecret"];
 const missingEnv = requiredEnv.filter((name) => !process.env[name]);
@@ -61,37 +63,122 @@ app.use(
   }),
 );
 
-function normalizeEmail(input) {
-  if (typeof input !== "string") {
-    return null;
-  }
-
-  const normalized = input.trim().toLowerCase();
-  if (!normalized || normalized.length > 320) {
-    return null;
-  }
-
-  return EMAIL_PATTERN.test(normalized) ? normalized : null;
-}
-
 function escapeQlikFilterString(value) {
   return value.replace(/\\/g, "\\\\").replace(/\"/g, '\\"');
 }
 
-async function getQlikUser(userEmail) {
-  const safeEmail = escapeQlikFilterString(userEmail);
-  const { data: user } = await qlikUsers.getUsers(
+function randomEmbedKey() {
+  return randomBytes(16).toString("hex");
+}
+
+function syntheticUserEmail(embedKey) {
+  return `oauth_gen_auto_${embedKey}@example.com`;
+}
+
+function normalizeUserList(response) {
+  const payload = response?.data;
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && Array.isArray(payload.data)) {
+    return payload.data;
+  }
+  return [];
+}
+
+function extractCreatedUserId(created) {
+  const d = created?.data;
+  if (typeof d?.id === "string") {
+    return d.id;
+  }
+  if (d && typeof d.data?.id === "string") {
+    return d.data.id;
+  }
+  return null;
+}
+
+async function listUsersByEmail(email) {
+  const safeEmail = escapeQlikFilterString(email);
+  const response = await qlikUsers.getUsers(
     {
       filter: `email eq \"${safeEmail}\"`,
     },
     {
       hostConfig: {
         ...config,
-        scope: "user_default",
+        scope: BACKEND_USER_SCOPE,
       },
     },
   );
-  return user;
+  return normalizeUserList(response);
+}
+
+async function createSyntheticUser(email) {
+  return qlikUsers.createUser(
+    {
+      name: email,
+      email,
+      subject: email,
+      status: "active",
+    },
+    {
+      hostConfig: {
+        ...config,
+        scope: BACKEND_USER_SCOPE,
+      },
+    },
+  );
+}
+
+async function provisionSessionUser(req, maxAttempts = 8) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (!req.session.embedKey) {
+      req.session.embedKey = randomEmbedKey();
+    }
+
+    const email = syntheticUserEmail(req.session.embedKey);
+
+    try {
+      const existing = await listUsersByEmail(email);
+      if (existing.length >= 1) {
+        req.session.userId = existing[0].id;
+        return { ok: true };
+      }
+
+      const created = await createSyntheticUser(email);
+      const id = extractCreatedUserId(created);
+      if (id) {
+        req.session.userId = id;
+        return { ok: true };
+      }
+
+      const afterCreate = await listUsersByEmail(email);
+      if (afterCreate.length >= 1) {
+        req.session.userId = afterCreate[0].id;
+        return { ok: true };
+      }
+    } catch (err) {
+      console.warn(
+        `provisionSessionUser attempt ${attempt}/${maxAttempts} failed`,
+        err?.message || err,
+      );
+      try {
+        const email = syntheticUserEmail(req.session.embedKey);
+        const recovered = await listUsersByEmail(email);
+        if (recovered.length >= 1) {
+          req.session.userId = recovered[0].id;
+          return { ok: true };
+        }
+      } catch {
+        // fall through to rotate identity
+      }
+    }
+
+    req.session.embedKey = randomEmbedKey();
+    delete req.session.userId;
+  }
+
+  return { ok: false };
 }
 
 function getSessionUserId(req) {
@@ -101,35 +188,14 @@ function getSessionUserId(req) {
 }
 
 app.get("/", async (req, res) => {
-  const email = req.session.email;
-  if (!email) {
-    res.redirect("/login");
-    return;
-  }
-
   try {
-      const currentUser = await getQlikUser(email);
-
-      if (currentUser.data.length !== 1) {
-        const currentUser = await qlikUsers.createUser(
-          {
-            name: "oauth_gen_auto_" + req.session.email,
-            email: "oauth_gen_auto_" + req.session.email,
-            subject: "oauth_gen_auto_" + req.session.email,
-            status: "active",
-          },
-          {
-            hostConfig: {
-              ...config,
-              scope: "admin_classic user_default",
-            },
-          },
-        );
-        req.session.userId = currentUser.data.id;
-      } else {
-        req.session.userId = currentUser.data[0].id;
-      }
-      res.sendFile(join(__dirname, "index.html"));
+    const result = await provisionSessionUser(req);
+    if (!result.ok) {
+      console.error("Failed to provision embed session user after retries");
+      res.status(503).send("Unable to initialize session. Please try again.");
+      return;
+    }
+    res.sendFile(join(__dirname, "index.html"));
   } catch (error) {
     console.error("Failed to initialize user session", error);
     res.status(500).send("Unable to initialize session");
@@ -137,16 +203,26 @@ app.get("/", async (req, res) => {
 });
 
 app.get("/login", (req, res) => {
-  res.sendFile(join(__dirname, "login.html"));
+  res.redirect(302, "/");
 });
 
 app.post("/login", (req, res) => {
-  const email = normalizeEmail(req.body?.email);
-  if (email) {
-    req.session.email = email;
-    res.redirect("/");
-  } else {
-    res.status(400).send("Please provide a valid email.");
+  res.redirect(302, "/");
+});
+
+app.post("/session/rotate", async (req, res) => {
+  delete req.session.userId;
+  req.session.embedKey = randomEmbedKey();
+  try {
+    const result = await provisionSessionUser(req);
+    if (!result.ok) {
+      res.status(503).json({ ok: false, error: "provision_failed" });
+      return;
+    }
+    res.json({ ok: true, sessionIdentity: req.session.embedKey });
+  } catch (err) {
+    console.error("session/rotate failed", err);
+    res.status(500).json({ ok: false, error: "server_error" });
   }
 });
 
@@ -156,7 +232,7 @@ app.get("/logout", (req, res) => {
       console.error("Error destroying session:", err);
     }
     res.clearCookie("connect.sid");
-    res.redirect("/login");
+    res.redirect("/");
   });
 });
 
@@ -219,6 +295,7 @@ app.get("/config", async (req, res) => {
     host,
     appId: process.env["appId"],
     clientId: process.env["clientId"],
+    sessionIdentity: typeof req.session.embedKey === "string" ? req.session.embedKey : "",
   };
   res.send(appConfig);
 });
