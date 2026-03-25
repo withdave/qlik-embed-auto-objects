@@ -25,19 +25,19 @@ const defaultThemes = [
 /** Server-side user API calls; frontend embed tokens still use `user_default` only. */
 const BACKEND_USER_SCOPE = "admin_classic user_default";
 
-const requiredEnv = ["host", "clientId", "clientSecret", "appId", "sessionSecret"];
+const requiredEnv = ["HOST", "CLIENT_ID", "CLIENT_SECRET", "APP_ID", "SESSION_SECRET"];
 const missingEnv = requiredEnv.filter((name) => !process.env[name]);
 if (missingEnv.length > 0) {
   throw new Error(`Missing required env vars: ${missingEnv.join(", ")}`);
 }
 
-const host = process.env.host.replace(/\/+$/, "");
+const host = process.env.HOST.replace(/\/+$/, "");
 
 const config = {
   authType: "oauth2",
   host,
-  clientId: process.env["clientId"],
-  clientSecret: process.env["clientSecret"],
+  clientId: process.env.CLIENT_ID,
+  clientSecret: process.env.CLIENT_SECRET,
   noCache: true,
 };
 
@@ -98,7 +98,7 @@ app.use(express.static("public"));
 
 app.use(
   session({
-    secret: process.env["sessionSecret"],
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -316,7 +316,7 @@ app.get("/assets", async (req, res) => {
 
   try {
     const appSession = openAppSession.openAppSession({
-      appId: process.env["appId"],
+      appId: process.env.APP_ID,
       hostConfig: {
         ...config,
         userId,
@@ -347,8 +347,8 @@ app.get("/config", async (req, res) => {
 
   const appConfig = {
     host,
-    appId: process.env["appId"],
-    clientId: process.env["clientId"],
+    appId: process.env.APP_ID,
+    clientId: process.env.CLIENT_ID,
     sessionIdentity: typeof req.session.embedKey === "string" ? req.session.embedKey : "",
   };
   res.send(appConfig);

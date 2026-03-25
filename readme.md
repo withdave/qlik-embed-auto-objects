@@ -30,11 +30,11 @@
    - Enable M2M and M2M user impersonation
    - Set consent method to `trusted`
 2. Copy `template.env` to `.env` and set:
-   - `clientId`
-   - `clientSecret`
-   - `host` (for example: `https://tenant.us.qlikcloud.com`)
-   - `appId`
-   - `sessionSecret` (a long random string for Express sessions)
+   - `CLIENT_ID`
+   - `CLIENT_SECRET`
+   - `HOST` (for example: `https://tenant.us.qlikcloud.com`)
+   - `APP_ID`
+   - `SESSION_SECRET` (a long random string for Express sessions)
 
 Optional: set `PORT` if you do not want the default `3000`.
 
