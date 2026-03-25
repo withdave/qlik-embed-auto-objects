@@ -783,6 +783,7 @@ function renderSectionsList() {
         } else {
           state.selected.delete(item.id);
         }
+        renderSectionsList();
         updateSectionMeta();
         renderSelectedItems();
         syncStateToUrl();
