@@ -84,6 +84,14 @@ const DEFAULT_CONFIG = {
 };
 const DEFAULT_CONFIG_COLLAPSED = true;
 
+function getDefaultPreviewForItemId(itemId) {
+  const sectionId = itemId.split("::")[0];
+  if (sectionId === "analyticssheet" || sectionId === "analyticschart") {
+    return true;
+  }
+  return DEFAULT_CONFIG.preview;
+}
+
 const state = {
   appConfig: null,
   assets: { sheets: [], objects: [] },
@@ -97,27 +105,44 @@ const state = {
   collapsedSections: new Set(),
   pendingUrlState: null,
   isApplyingUrlState: false,
+  /** Bumps qlik-embed `identity` to force a new engine session without a full reload. */
+  connectionIdentityBump: 0,
 };
 
 const dom = {};
 
 async function buildError(response, fallbackMessage) {
-  const err = new Error(fallbackMessage);
-  err.status = response.status;
+  let detail = "";
   try {
-    err.detail = await response.text();
+    detail = await response.text();
   } catch {
-    err.detail = "";
+    detail = "";
   }
+  let message = fallbackMessage;
+  if (detail) {
+    try {
+      const parsed = JSON.parse(detail);
+      if (parsed && typeof parsed === "object" && typeof parsed.error === "string") {
+        message = parsed.error;
+      }
+    } catch {
+      if (detail.length < 200) {
+        message = detail;
+      }
+    }
+  }
+  const err = new Error(message);
+  err.status = response.status;
+  err.detail = detail;
   return err;
 }
 
 function uint8ToBinary(input) {
   let binary = "";
-  const chunkSize = 0x8000;
+  const chunkSize = 0x2000;
   for (let index = 0; index < input.length; index += chunkSize) {
     const chunk = input.subarray(index, index + chunkSize);
-    binary += String.fromCharCode(...chunk);
+    binary += String.fromCharCode.apply(null, chunk);
   }
   return binary;
 }
@@ -146,7 +171,7 @@ function decodeState(encoded) {
   return JSON.parse(json);
 }
 
-function compactConfig(config) {
+function compactConfig(config, itemId) {
   const compact = {};
   if (config.theme !== DEFAULT_CONFIG.theme) {
     compact.t = config.theme;
@@ -157,7 +182,7 @@ function compactConfig(config) {
   if (config.identity !== DEFAULT_CONFIG.identity) {
     compact.i = config.identity;
   }
-  if (config.preview !== DEFAULT_CONFIG.preview) {
+  if (config.preview !== getDefaultPreviewForItemId(itemId)) {
     compact.p = config.preview;
   }
   if (config.iframe !== DEFAULT_CONFIG.iframe) {
@@ -221,7 +246,7 @@ function buildShareState() {
     if (!state.configs.has(itemId)) {
       return;
     }
-    const compact = compactConfig(state.configs.get(itemId));
+    const compact = compactConfig(state.configs.get(itemId), itemId);
     if (Object.keys(compact).length > 0) {
       configs[itemId] = compact;
     }
@@ -343,28 +368,76 @@ function applyStatePayload(payload) {
   state.isApplyingUrlState = false;
 }
 
-function handleAuthError(error) {
-  if (error?.status === 401) {
-    window.location.assign("/login");
-    return true;
-  }
-  return false;
-}
-
-async function getAccessToken() {
-  const response = await fetch("/access-token", {
+async function rotateServerSession() {
+  const response = await fetch("/session/rotate", {
     method: "POST",
     credentials: "include",
     mode: "same-origin",
     redirect: "follow",
   });
+  return response.ok;
+}
+
+async function recoverSessionAndReload() {
+  await rotateServerSession();
+  window.location.reload();
+}
+
+function handleAuthError(error) {
+  if (error?.status === 401) {
+    recoverSessionAndReload();
+    return true;
+  }
+  return false;
+}
+
+function bumpConnectionIdentity() {
+  state.connectionIdentityBump += 1;
+  Array.from(state.selected).forEach((itemId) => {
+    rerenderItem(itemId);
+  });
+}
+
+async function getAccessToken() {
+  const fetchToken = () =>
+    fetch("/access-token", {
+      method: "POST",
+      credentials: "include",
+      mode: "same-origin",
+      redirect: "follow",
+    });
+
+  let response = await fetchToken();
+  if (response.status === 401) {
+    const rotated = await rotateServerSession();
+    if (rotated) {
+      await refreshAppConfig();
+      state.connectionIdentityBump = 0;
+      Array.from(state.selected).forEach((itemId) => {
+        rerenderItem(itemId);
+      });
+      response = await fetchToken();
+    }
+  }
   if (response.status === 200) {
     return response.text();
+  }
+  if (response.status === 401) {
+    if (state.connectionIdentityBump < 2) {
+      bumpConnectionIdentity();
+      response = await fetchToken();
+      if (response.status === 200) {
+        return response.text();
+      }
+    }
+    await recoverSessionAndReload();
+    throw await buildError(response, "Session recovery in progress");
   }
   throw await buildError(response, "Unexpected serverside authentication error");
 }
 
 window.getAccessToken = getAccessToken;
+window.bumpQlikEmbedConnectionIdentity = bumpConnectionIdentity;
 
 async function getSheets() {
   const response = await fetch("/assets", {
@@ -390,6 +463,16 @@ async function getConfig() {
     return response.json();
   }
   throw await buildError(response, "Unexpected error");
+}
+
+async function refreshAppConfig() {
+  try {
+    const next = await getConfig();
+    state.appConfig = state.appConfig ? { ...state.appConfig, ...next } : next;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function getThemes() {
@@ -495,6 +578,12 @@ function setAssetsStatus(message, tone = "idle") {
   dom.assetsStatus.dataset.tone = tone;
 }
 
+function setAssetsRetryVisible(visible) {
+  if (dom.assetsRetry) {
+    dom.assetsRetry.hidden = !visible;
+  }
+}
+
 function buildItems() {
   state.items.clear();
   UI_DEFINITIONS.forEach((section) => {
@@ -556,7 +645,7 @@ function getItemConfig(itemId) {
       theme: DEFAULT_CONFIG.theme,
       language: DEFAULT_CONFIG.language,
       identity: DEFAULT_CONFIG.identity,
-      preview: DEFAULT_CONFIG.preview,
+      preview: getDefaultPreviewForItemId(itemId),
       iframe: DEFAULT_CONFIG.iframe,
       interactions: { ...DEFAULT_CONFIG.interactions },
     });
@@ -576,20 +665,60 @@ function createOption(option) {
   return element;
 }
 
+const CONFIG_ICON_SVG =
+  '<svg class="config-icon-btn__svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>';
+
+function isItemConfigActive(itemId) {
+  return state.activeConfigItem === itemId && !state.configCollapsed;
+}
+
+function applyConfigureButtonState(button, itemId) {
+  const active = isItemConfigActive(itemId);
+  button.classList.toggle("is-active", active);
+  button.setAttribute("aria-pressed", active ? "true" : "false");
+}
+
+function refreshConfigureButtonStates() {
+  document.querySelectorAll(".config-icon-btn").forEach((btn) => {
+    const host = btn.closest("[data-item-id]");
+    const itemId = host?.dataset.itemId;
+    if (itemId) {
+      applyConfigureButtonState(btn, itemId);
+    }
+  });
+}
+
+function createConfigureButton(item) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "config-icon-btn";
+  btn.title = "Configure";
+  btn.setAttribute("aria-label", `Configure ${item.name}`);
+  btn.innerHTML = CONFIG_ICON_SVG;
+  applyConfigureButtonState(btn, item.id);
+  btn.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleConfigForItem(item.id);
+  });
+  return btn;
+}
+
 function renderSectionsList() {
   dom.sectionsList.innerHTML = "";
   UI_DEFINITIONS.forEach((section) => {
     const sectionItems = Array.from(state.items.values()).filter(
       (item) => item.sectionId === section.id,
     );
-    const selectedCount = sectionItems.filter((item) => state.selected.has(item.id)).length;
-    const allSelected = sectionItems.length > 0 && selectedCount === sectionItems.length;
-
     const filterValue = state.filter.trim().toLowerCase();
     const visibleItems = sectionItems.filter((item) =>
       item.name.toLowerCase().includes(filterValue),
     );
+    const targetItems = filterValue ? visibleItems : sectionItems;
+    const selectedCount = sectionItems.filter((item) => state.selected.has(item.id)).length;
     const selectedVisibleCount = visibleItems.filter((item) => state.selected.has(item.id)).length;
+    const allSelected =
+      targetItems.length > 0 && targetItems.every((item) => state.selected.has(item.id));
 
     const sectionWrapper = document.createElement("div");
     sectionWrapper.className = "section-group";
@@ -612,7 +741,9 @@ function renderSectionsList() {
 
     const meta = document.createElement("div");
     meta.className = "section-group__meta";
-    meta.textContent = `${selectedVisibleCount} selected of ${sectionItems.length}`;
+    const metaDenominator = filterValue ? visibleItems.length : sectionItems.length;
+    const metaNumerator = filterValue ? selectedVisibleCount : selectedCount;
+    meta.textContent = `${metaNumerator}/${metaDenominator}`;
 
     const toggleSelection = document.createElement("button");
     toggleSelection.type = "button";
@@ -652,6 +783,7 @@ function renderSectionsList() {
         } else {
           state.selected.delete(item.id);
         }
+        renderSectionsList();
         updateSectionMeta();
         renderSelectedItems();
         syncStateToUrl();
@@ -660,14 +792,7 @@ function renderSectionsList() {
       const name = document.createElement("span");
       name.textContent = item.name;
 
-      const action = document.createElement("button");
-      action.className = "section-item__action";
-      action.type = "button";
-      action.textContent = "Configure";
-      action.addEventListener("click", (event) => {
-        event.preventDefault();
-        toggleConfigForItem(item.id);
-      });
+      const action = createConfigureButton(item);
 
       row.appendChild(checkbox);
       row.appendChild(name);
@@ -682,12 +807,21 @@ function renderSectionsList() {
 
 function toggleSectionSelection(sectionId) {
   const sectionItems = Array.from(state.items.values()).filter((item) => item.sectionId === sectionId);
-  const allSelected = sectionItems.length > 0 && sectionItems.every((item) => state.selected.has(item.id));
+  const filterValue = state.filter.trim().toLowerCase();
+  const targetItems = filterValue
+    ? sectionItems.filter((item) => item.name.toLowerCase().includes(filterValue))
+    : sectionItems;
+
+  if (targetItems.length === 0) {
+    return;
+  }
+
+  const allSelected = targetItems.every((item) => state.selected.has(item.id));
 
   if (allSelected) {
-    sectionItems.forEach((item) => state.selected.delete(item.id));
+    targetItems.forEach((item) => state.selected.delete(item.id));
   } else {
-    sectionItems.forEach((item) => state.selected.add(item.id));
+    targetItems.forEach((item) => state.selected.add(item.id));
   }
 
   renderSectionsList();
@@ -708,12 +842,15 @@ function toggleSectionCollapsed(sectionId) {
 
 function updateSectionMeta() {
   UI_DEFINITIONS.forEach((section) => {
+    const sectionItems = Array.from(state.items.values()).filter(
+      (item) => item.sectionId === section.id,
+    );
     const count = Array.from(state.selected).filter((itemId) =>
       itemId.startsWith(`${section.id}::`),
     ).length;
     const meta = document.getElementById(`meta-${section.id}`);
     if (meta) {
-      meta.textContent = `${count} selected`;
+      meta.textContent = `${count}/${sectionItems.length}`;
     }
   });
   updateEmptyState();
@@ -764,11 +901,29 @@ function buildEmbedCard(item) {
   const title = document.createElement("div");
   title.className = "embed-card__title";
   title.textContent = item.name;
+
+  const meta = document.createElement("div");
+  meta.className = "embed-card__meta";
   const subtitle = document.createElement("div");
   subtitle.className = "embed-card__subtitle";
   subtitle.textContent = item.ui;
+  const configureBtn = createConfigureButton(item);
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "embed-card__remove";
+  removeBtn.title = "Remove";
+  removeBtn.setAttribute("aria-label", `Remove ${item.name} from selection`);
+  removeBtn.textContent = "×";
+  removeBtn.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    removeItemFromSelection(item.id);
+  });
+  meta.appendChild(subtitle);
+  meta.appendChild(configureBtn);
+  meta.appendChild(removeBtn);
   header.appendChild(title);
-  header.appendChild(subtitle);
+  header.appendChild(meta);
 
   const embedWrapper = document.createElement("div");
   embedWrapper.className = "embed-card__body";
@@ -782,6 +937,21 @@ function buildEmbedCard(item) {
 
 function toDomId(value) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+function removeItemFromSelection(itemId) {
+  if (!state.selected.has(itemId)) {
+    return;
+  }
+  state.selected.delete(itemId);
+  if (state.activeConfigItem === itemId) {
+    state.activeConfigItem = null;
+  }
+  renderSectionsList();
+  updateSectionMeta();
+  renderSelectedItems();
+  renderConfigPanel();
+  syncStateToUrl();
 }
 
 function renderShortcuts(renderedItems) {
@@ -810,11 +980,29 @@ function renderShortcuts(renderedItems) {
   });
 
   renderedItems.forEach((item) => {
+    const row = document.createElement("span");
+    row.className = "jump-chip-row";
+
     const link = document.createElement("a");
     link.className = "jump-link jump-link--item";
     link.href = `#render-${toDomId(item.id)}`;
     link.textContent = `${item.name} (${item.ui})`;
-    dom.jumpLinks.appendChild(link);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "jump-chip-remove";
+    removeBtn.title = "Remove";
+    removeBtn.setAttribute("aria-label", `Remove ${item.name} from selection`);
+    removeBtn.textContent = "×";
+    removeBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      removeItemFromSelection(item.id);
+    });
+
+    row.appendChild(link);
+    row.appendChild(removeBtn);
+    dom.jumpLinks.appendChild(row);
   });
 
   dom.shortcutsMeta.textContent = `${renderedSections.size} sections, ${renderedItems.length} items`;
@@ -841,8 +1029,15 @@ function createEmbedNode(item) {
   if (config.language) {
     embed.setAttribute("language", config.language);
   }
-  if (config.identity) {
-    embed.setAttribute("identity", config.identity);
+  const sessionIdentity = state.appConfig?.sessionIdentity || "";
+  let identity = config.identity || sessionIdentity;
+  if (state.connectionIdentityBump > 0) {
+    identity = identity
+      ? `${identity}-r${state.connectionIdentityBump}`
+      : `r${state.connectionIdentityBump}`;
+  }
+  if (identity) {
+    embed.setAttribute("identity", identity);
   }
   if (typeof config.preview === "boolean" && supportsParam(item.ui, "preview")) {
     embed.setAttribute("preview", String(config.preview));
@@ -867,6 +1062,7 @@ function supportsParam(ui, param) {
 function setActiveConfigItem(itemId) {
   state.activeConfigItem = itemId;
   renderConfigPanel();
+  refreshConfigureButtonStates();
   syncStateToUrl();
 }
 
@@ -875,7 +1071,7 @@ function setConfigPanelCollapsed(collapsed) {
   dom.configPanel.classList.toggle("collapsed", collapsed);
   dom.mainApp.classList.toggle("config-collapsed", collapsed);
   dom.toggleConfig.textContent = collapsed ? "Show" : "Hide";
-  dom.reopenConfig.classList.toggle("visible", collapsed);
+  refreshConfigureButtonStates();
   syncStateToUrl();
 }
 
@@ -1044,7 +1240,8 @@ function buildSelectControl(label, name, value, options, onChange) {
   const select = document.createElement("select");
   select.name = name;
   options.forEach((option) => select.appendChild(createOption(option)));
-  select.value = value;
+  const allowed = new Set(options.map((o) => o.value));
+  select.value = allowed.has(value) ? value : "";
   select.addEventListener("change", (event) => onChange(event.target.value));
   wrapper.appendChild(title);
   wrapper.appendChild(select);
@@ -1129,8 +1326,85 @@ function clearSelections() {
   syncStateToUrl();
 }
 
+function sanitizeConfigsAgainstOptions() {
+  const allowedTheme = new Set(themeOptions.map((t) => t.value));
+  const allowedLang = new Set(LANGUAGE_OPTIONS.map((t) => t.value));
+  for (const config of state.configs.values()) {
+    if (config.theme && !allowedTheme.has(config.theme)) {
+      config.theme = "";
+    }
+    if (config.language && !allowedLang.has(config.language)) {
+      config.language = "";
+    }
+  }
+}
+
+function parseSheetDefinitions(sheetDefs) {
+  if (!Array.isArray(sheetDefs)) {
+    console.warn("Sheet list response is not an array; using empty assets.");
+    return { sheets: [], objects: [] };
+  }
+
+  const sheets = [];
+  for (const sheet of sheetDefs) {
+    const id = sheet?.qMeta?.id;
+    const title = sheet?.qMeta?.title;
+    if (!id) {
+      console.warn("Skipping sheet entry without qMeta.id.", sheet);
+      continue;
+    }
+    sheets.push({
+      id,
+      name: typeof title === "string" && title ? title : id,
+    });
+  }
+
+  const objectsMap = new Map();
+  for (const obj of sheetDefs) {
+    const cells = obj?.qData?.cells;
+    if (!Array.isArray(cells)) {
+      continue;
+    }
+    for (const cell of cells) {
+      const name = cell?.name;
+      if (!name) {
+        continue;
+      }
+      if (!objectsMap.has(name)) {
+        objectsMap.set(name, {
+          id: name,
+          name: typeof cell?.type === "string" && cell.type ? cell.type : name,
+        });
+      }
+    }
+  }
+
+  const objects = Array.from(objectsMap.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+
+  return {
+    sheets: sheets.sort((a, b) => a.name.localeCompare(b.name)),
+    objects,
+  };
+}
+
+function handleLoadAssetsError(error) {
+  if (handleAuthError(error)) {
+    return;
+  }
+  const msg =
+    typeof error?.message === "string" && error.message.length > 0 && error.message !== "Unexpected error"
+      ? error.message
+      : "Failed to load assets. Check your connection or session.";
+  setAssetsStatus(msg, "error");
+  setAssetsRetryVisible(true);
+  console.error(error);
+}
+
 async function loadAssets() {
   setAssetsStatus("Loading...", "loading");
+  setAssetsRetryVisible(false);
   await ensureQlikEmbedHead();
   try {
     const tenantThemes = await getThemes();
@@ -1141,28 +1415,10 @@ async function loadAssets() {
   }
 
   const sheetDefs = await getSheets();
-  const sheets = sheetDefs.map((sheet) => ({
-    id: sheet.qMeta.id,
-    name: sheet.qMeta.title,
-  }));
-  const objectsMap = new Map();
-  sheetDefs.forEach((obj) => {
-    obj.qData.cells.forEach((cell) => {
-      if (!objectsMap.has(cell.name)) {
-        objectsMap.set(cell.name, { id: cell.name, name: cell.type });
-      }
-    });
-  });
-  const objects = Array.from(objectsMap.values()).sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
-
-  state.assets = {
-    sheets: sheets.sort((a, b) => a.name.localeCompare(b.name)),
-    objects,
-  };
+  state.assets = parseSheetDefinitions(sheetDefs);
   buildItems();
   applyStatePayload(state.pendingUrlState);
+  sanitizeConfigsAgainstOptions();
   setConfigPanelCollapsed(state.configCollapsed);
   renderSectionsList();
   updateSectionMeta();
@@ -1176,7 +1432,6 @@ function bindDom() {
   dom.mainApp = document.getElementById("main-app");
   dom.configPanel = document.getElementById("config-panel");
   dom.toggleConfig = document.getElementById("toggle-config");
-  dom.reopenConfig = document.getElementById("reopen-config");
   dom.sectionsList = document.getElementById("sections-list");
   dom.configPanelBody = document.getElementById("config-panel-body");
   dom.configSummary = document.getElementById("config-summary");
@@ -1188,15 +1443,12 @@ function bindDom() {
   dom.emptyState = document.getElementById("empty-state");
   dom.jumpLinks = document.getElementById("jump-links");
   dom.shortcutsMeta = document.getElementById("shortcuts-meta");
+  dom.assetsRetry = document.getElementById("assets-retry");
 }
 
 function bindEvents() {
   dom.toggleConfig.addEventListener("click", () => {
     setConfigPanelCollapsed(!state.configCollapsed);
-  });
-
-  dom.reopenConfig.addEventListener("click", () => {
-    setConfigPanelCollapsed(false);
   });
 
   dom.filterInput.addEventListener("input", (event) => {
@@ -1219,7 +1471,36 @@ function bindEvents() {
   dom.clearAll.addEventListener("click", () => {
     clearSelections();
   });
+
+  if (dom.assetsRetry) {
+    dom.assetsRetry.addEventListener("click", () => {
+      loadAssets().catch(handleLoadAssetsError);
+    });
+  }
 }
+
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event.reason;
+  if (!reason || typeof reason !== "object") {
+    return;
+  }
+  if (reason.status === 401) {
+    if (state.connectionIdentityBump < 3) {
+      bumpConnectionIdentity();
+    } else {
+      recoverSessionAndReload();
+    }
+    return;
+  }
+  if (typeof reason.status === "number" && reason.status >= 400 && dom.assetsStatus) {
+    const text =
+      typeof reason.message === "string" && reason.message.length > 0
+        ? reason.message
+        : "Request failed";
+    setAssetsStatus(`Error (${reason.status}): ${text}`, "error");
+    setAssetsRetryVisible(true);
+  }
+});
 
 document.addEventListener("DOMContentLoaded", () => {
   state.pendingUrlState = parseStateFromUrl();
@@ -1228,11 +1509,5 @@ document.addEventListener("DOMContentLoaded", () => {
   renderSectionsList();
   updateSectionMeta();
   renderConfigPanel();
-  loadAssets().catch((error) => {
-    if (handleAuthError(error)) {
-      return;
-    }
-    setAssetsStatus("Failed to load assets", "error");
-    console.error(error);
-  });
+  loadAssets().catch(handleLoadAssetsError);
 });

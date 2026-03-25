@@ -1,9 +1,12 @@
 import express from "express";
+import helmet from "helmet";
 import session from "express-session";
-import { join } from "path";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+import { randomBytes } from "crypto";
 import dotenv from "dotenv";
 
-dotenv.config({quiet: true });
+dotenv.config({ quiet: true });
 
 import {
   auth as qlikAuth,
@@ -19,79 +22,282 @@ const defaultThemes = [
   { id: "horizon", key: "horizon", name: "Horizon" },
 ];
 
-const EMAIL_PATTERN = /^[^\s@"]+@[^\s@"]+\.[^\s@"]+$/;
+/** Server-side user API calls; frontend embed tokens still use `user_default` only. */
+const BACKEND_USER_SCOPE = "admin_classic user_default";
 
-const requiredEnv = ["host", "clientId", "clientSecret", "appId", "sessionSecret"];
+const requiredEnv = ["HOST", "CLIENT_ID", "CLIENT_SECRET", "APP_ID", "SESSION_SECRET"];
 const missingEnv = requiredEnv.filter((name) => !process.env[name]);
 if (missingEnv.length > 0) {
   throw new Error(`Missing required env vars: ${missingEnv.join(", ")}`);
 }
 
-const host = process.env.host.replace(/\/+$/, "");
+const host = process.env.HOST.replace(/\/+$/, "");
 
 const config = {
   authType: "oauth2",
   host,
-  clientId: process.env["clientId"],
-  clientSecret: process.env["clientSecret"],
+  clientId: process.env.CLIENT_ID,
+  clientSecret: process.env.CLIENT_SECRET,
   noCache: true,
 };
 
 qlikAuth.setDefaultHostConfig(config);
 
-const __dirname = new URL(".", import.meta.url).pathname;
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.set("trust proxy", 1);
 
+/** Qlik Cloud tenant + jsDelivr + QMFE; host allowlists below; unsafe-* only where Qlik runtime requires it. */
+function buildContentSecurityPolicy() {
+  const hostForUrl = /^https?:\/\//i.test(host) ? host : `https://${host}`;
+  let tenantOrigin;
+  let tenantHost = "";
+  try {
+    const tenantUrl = new URL(hostForUrl);
+    tenantOrigin = tenantUrl.origin;
+    tenantHost = tenantUrl.hostname;
+  } catch {
+    tenantOrigin = host;
+  }
+  // CSP: `https://tenant` does not allow `wss://tenant`; list both for engine WebSockets.
+  const tenantWss = tenantHost ? `wss://${tenantHost}` : "";
+  const jsdelivr = "https://cdn.jsdelivr.net";
+  /** Qlik Cloud federation CDN: import map + dynamic chunks (see QMFE / @qlik/embed-web-components). */
+  const qlikGlobalCdn = "https://cdn.qlikcloud.com";
+  /** Qlik Cloud uses LaunchDarkly for feature flags (e.g. /sdk/goals). */
+  const launchDarkly = [
+    "https://app.launchdarkly.com",
+    "https://clientstream.launchdarkly.com",
+    "https://events.launchdarkly.com",
+  ];
+  /** QMFE usage metrics / Elastic Hub credentials (sqs-proxy). */
+  const qlikDataEngineeringApi = "https://api.qlikdataengineering.com";
+  return {
+    directives: {
+      defaultSrc: ["'self'"],
+      // Sense/QMFE client calls `new Function()` (e.g. extension APIs); without 'unsafe-eval' the embed throws EvalError.
+      scriptSrc: ["'self'", "'unsafe-eval'", jsdelivr, qlikGlobalCdn, tenantOrigin],
+      // Qlik embed web components apply inline styles to rendered charts.
+      styleSrc: ["'self'", "'unsafe-inline'", jsdelivr, qlikGlobalCdn, tenantOrigin],
+      imgSrc: ["'self'", "data:", "blob:", tenantOrigin, qlikGlobalCdn],
+      fontSrc: ["'self'", "data:", tenantOrigin, qlikGlobalCdn],
+      connectSrc: [
+        "'self'",
+        jsdelivr,
+        qlikGlobalCdn,
+        qlikDataEngineeringApi,
+        tenantOrigin,
+        tenantWss,
+        ...launchDarkly,
+      ].filter(Boolean),
+      frameSrc: ["'self'", tenantOrigin],
+      workerSrc: ["'self'", "blob:"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+    },
+  };
+}
+
+app.use(
+  helmet({
+    contentSecurityPolicy: buildContentSecurityPolicy(),
+  }),
+);
+
+/** Simple sliding-window rate limiter (per IP, in-memory). */
+const rateBuckets = new Map();
+/** Evict entries whose window has ended (no recent activity still holds the key). */
+const RATE_BUCKET_MAX_ENTRIES = 5000;
+const RATE_PRUNE_INTERVAL_MS = 60_000;
+
+function pruneStaleRateBuckets(now = Date.now()) {
+  for (const [key, bucket] of rateBuckets) {
+    if (now - bucket.start >= bucket.windowMs) {
+      rateBuckets.delete(key);
+    }
+  }
+}
+
+setInterval(() => {
+  pruneStaleRateBuckets();
+}, RATE_PRUNE_INTERVAL_MS).unref?.();
+
+function rateLimit({ windowMs, max, keyPrefix, onLimit }) {
+  return (req, res, next) => {
+    const ip = req.ip || req.socket?.remoteAddress || "unknown";
+    const key = `${keyPrefix}:${ip}`;
+    const now = Date.now();
+    if (rateBuckets.size > RATE_BUCKET_MAX_ENTRIES) {
+      pruneStaleRateBuckets(now);
+    }
+    let bucket = rateBuckets.get(key);
+    if (!bucket || now - bucket.start >= windowMs) {
+      bucket = { start: now, count: 0, windowMs };
+      rateBuckets.set(key, bucket);
+    }
+    bucket.count += 1;
+    if (bucket.count > max) {
+      if (typeof onLimit === "function") {
+        onLimit(req, res);
+        return;
+      }
+      res.status(429).json({ error: "Too many requests" });
+      return;
+    }
+    next();
+  };
+}
+
+const limitSessionRotate = rateLimit({ windowMs: 60_000, max: 30, keyPrefix: "rotate" });
+const limitAccessToken = rateLimit({ windowMs: 60_000, max: 200, keyPrefix: "token" });
+/** Limits session provisioning on first page load (Qlik user creation cost). */
+const limitHomeProvision = rateLimit({
+  windowMs: 60_000,
+  max: 90,
+  keyPrefix: "home",
+  onLimit: (req, res) => {
+    res.status(429).type("html").send(
+      "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Too many requests</title></head>"
+        + "<body><p>Too many requests. Please try again in a minute.</p></body></html>",
+    );
+  },
+});
+
 app.use(express.static("public"));
-app.use(express.urlencoded({ extended: true }));
 
 app.use(
   session({
-    secret: process.env["sessionSecret"],
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production" ? "auto" : false,
+      secure: process.env.NODE_ENV === "production",
       maxAge: 8 * 60 * 60 * 1000,
     },
   }),
 );
 
-function normalizeEmail(input) {
-  if (typeof input !== "string") {
-    return null;
-  }
-
-  const normalized = input.trim().toLowerCase();
-  if (!normalized || normalized.length > 320) {
-    return null;
-  }
-
-  return EMAIL_PATTERN.test(normalized) ? normalized : null;
-}
-
 function escapeQlikFilterString(value) {
   return value.replace(/\\/g, "\\\\").replace(/\"/g, '\\"');
 }
 
-async function getQlikUser(userEmail) {
-  const safeEmail = escapeQlikFilterString(userEmail);
-  const { data: user } = await qlikUsers.getUsers(
+function randomEmbedKey() {
+  return randomBytes(16).toString("hex");
+}
+
+function syntheticUserEmail(embedKey) {
+  return `oauth_gen_auto_${embedKey}@example.com`;
+}
+
+function normalizeUserList(response) {
+  const payload = response?.data;
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && Array.isArray(payload.data)) {
+    return payload.data;
+  }
+  return [];
+}
+
+function extractCreatedUserId(created) {
+  const d = created?.data;
+  if (typeof d?.id === "string") {
+    return d.id;
+  }
+  if (d && typeof d.data?.id === "string") {
+    return d.data.id;
+  }
+  return null;
+}
+
+async function listUsersByEmail(email) {
+  const safeEmail = escapeQlikFilterString(email);
+  const response = await qlikUsers.getUsers(
     {
       filter: `email eq \"${safeEmail}\"`,
     },
     {
       hostConfig: {
         ...config,
-        scope: "user_default",
+        scope: BACKEND_USER_SCOPE,
       },
     },
   );
-  return user;
+  return normalizeUserList(response);
+}
+
+async function createSyntheticUser(email) {
+  return qlikUsers.createUser(
+    {
+      name: email,
+      email,
+      subject: email,
+      status: "active",
+    },
+    {
+      hostConfig: {
+        ...config,
+        scope: BACKEND_USER_SCOPE,
+      },
+    },
+  );
+}
+
+async function provisionSessionUser(req, maxAttempts = 8) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (!req.session.embedKey) {
+      req.session.embedKey = randomEmbedKey();
+    }
+
+    const email = syntheticUserEmail(req.session.embedKey);
+
+    try {
+      const existing = await listUsersByEmail(email);
+      if (existing.length >= 1) {
+        req.session.userId = existing[0].id;
+        return { ok: true };
+      }
+
+      const created = await createSyntheticUser(email);
+      const id = extractCreatedUserId(created);
+      if (id) {
+        req.session.userId = id;
+        return { ok: true };
+      }
+
+      const afterCreate = await listUsersByEmail(email);
+      if (afterCreate.length >= 1) {
+        req.session.userId = afterCreate[0].id;
+        return { ok: true };
+      }
+    } catch (err) {
+      console.warn(
+        `provisionSessionUser attempt ${attempt}/${maxAttempts} failed`,
+        err?.message || err,
+      );
+      try {
+        const email = syntheticUserEmail(req.session.embedKey);
+        const recovered = await listUsersByEmail(email);
+        if (recovered.length >= 1) {
+          req.session.userId = recovered[0].id;
+          return { ok: true };
+        }
+      } catch {
+        // fall through to rotate identity
+      }
+    }
+
+    req.session.embedKey = randomEmbedKey();
+    delete req.session.userId;
+  }
+
+  return { ok: false };
 }
 
 function getSessionUserId(req) {
@@ -100,70 +306,60 @@ function getSessionUserId(req) {
     : null;
 }
 
-app.get("/", async (req, res) => {
-  const email = req.session.email;
-  if (!email) {
-    res.redirect("/login");
-    return;
-  }
-
+app.get("/", limitHomeProvision, async (req, res) => {
   try {
-      const currentUser = await getQlikUser(email);
-
-      if (currentUser.data.length !== 1) {
-        const currentUser = await qlikUsers.createUser(
-          {
-            name: "oauth_gen_auto_" + req.session.email,
-            email: "oauth_gen_auto_" + req.session.email,
-            subject: "oauth_gen_auto_" + req.session.email,
-            status: "active",
-          },
-          {
-            hostConfig: {
-              ...config,
-              scope: "admin_classic user_default",
-            },
-          },
-        );
-        req.session.userId = currentUser.data.id;
-      } else {
-        req.session.userId = currentUser.data[0].id;
-      }
-      res.sendFile(join(__dirname, "index.html"));
+    const result = await provisionSessionUser(req);
+    if (!result.ok) {
+      console.error("Failed to provision embed session user after retries");
+      res.status(503).send("Unable to initialize session. Please try again.");
+      return;
+    }
+    res.sendFile(join(__dirname, "index.html"));
   } catch (error) {
     console.error("Failed to initialize user session", error);
     res.status(500).send("Unable to initialize session");
   }
 });
 
-app.get("/login", (req, res) => {
-  res.sendFile(join(__dirname, "login.html"));
-});
-
-app.post("/login", (req, res) => {
-  const email = normalizeEmail(req.body?.email);
-  if (email) {
-    req.session.email = email;
-    res.redirect("/");
-  } else {
-    res.status(400).send("Please provide a valid email.");
+app.post("/session/rotate", limitSessionRotate, async (req, res) => {
+  delete req.session.userId;
+  req.session.embedKey = randomEmbedKey();
+  try {
+    const result = await provisionSessionUser(req);
+    if (!result.ok) {
+      res.status(503).json({ ok: false, error: "provision_failed" });
+      return;
+    }
+    res.json({ ok: true, sessionIdentity: req.session.embedKey });
+  } catch (err) {
+    console.error("session/rotate failed", err);
+    res.status(500).json({ ok: false, error: "server_error" });
   }
 });
 
-app.get("/logout", (req, res) => {
+function destroySessionAndRedirect(req, res) {
   req.session.destroy((err) => {
     if (err) {
       console.error("Error destroying session:", err);
     }
     res.clearCookie("connect.sid");
-    res.redirect("/login");
+    res.redirect(303, "/");
   });
+}
+
+app.get("/logout", (req, res) => {
+  res.status(405).set("Allow", "POST").type("html").send(
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Method not allowed</title></head>"
+      + "<body><p>Logout must use POST. Use <strong>Clear session</strong> in the app bar.</p></body></html>",
+  );
 });
 
-app.post("/access-token", async (req, res) => {
+app.post("/logout", destroySessionAndRedirect);
+
+app.post("/access-token", limitAccessToken, async (req, res) => {
   const userId = getSessionUserId(req);
   if (!userId) {
-    res.status(401).send("Not authenticated");
+    res.status(401).json({ error: "Not authenticated" });
     return;
   }
 
@@ -178,7 +374,8 @@ app.post("/access-token", async (req, res) => {
     res.send(accessToken);
   } catch (err) {
     console.error("Unable to retrieve access token", err);
-    res.status(401).send("No access");
+    const status = err?.statusCode === 401 || err?.status === 401 ? 401 : 502;
+    res.status(status).json({ error: "Unable to retrieve access token" });
   }
 });
 
@@ -191,7 +388,7 @@ app.get("/assets", async (req, res) => {
 
   try {
     const appSession = openAppSession.openAppSession({
-      appId: process.env["appId"],
+      appId: process.env.APP_ID,
       hostConfig: {
         ...config,
         userId,
@@ -204,7 +401,12 @@ app.get("/assets", async (req, res) => {
     res.send(sheetList);
   } catch (err) {
     console.error("Unable to retrieve sheet definitions", err);
-    res.status(401).send("Unable to retrieve sheet definitions.");
+    const unauthorized =
+      err?.statusCode === 401
+      || err?.status === 401
+      || /401|unauthoriz/i.test(String(err?.message || ""));
+    const status = unauthorized ? 401 : 502;
+    res.status(status).json({ error: "Unable to retrieve sheet definitions" });
   }
 });
 
@@ -217,8 +419,9 @@ app.get("/config", async (req, res) => {
 
   const appConfig = {
     host,
-    appId: process.env["appId"],
-    clientId: process.env["clientId"],
+    appId: process.env.APP_ID,
+    clientId: process.env.CLIENT_ID,
+    sessionIdentity: typeof req.session.embedKey === "string" ? req.session.embedKey : "",
   };
   res.send(appConfig);
 });
