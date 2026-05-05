@@ -28,10 +28,10 @@ jobs:
         env:
           CI: "true"
           PORT: "3000"
-          HOST: ${{ secrets.HOST }}
-          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          HOST: ${{ vars.HOST }}
+          CLIENT_ID: ${{ vars.CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          APP_ID: ${{ secrets.APP_ID }}
+          APP_ID: ${{ vars.APP_ID }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
         run: npm run test:e2e -- --update-snapshots
 
