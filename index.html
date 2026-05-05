@@ -44,12 +44,12 @@
       </div>
     </div>
   </div>
-  <div class="main-app" id="main-app">
+  <div class="main-app" id="main-app" data-testid="main-app">
     <aside class="control-panel">
       <div class="panel-section">
         <div class="panel-title">Selections</div>
         <div class="assets-status-row">
-          <div class="panel-note" id="assets-status">Loading app assets...</div>
+          <div class="panel-note" id="assets-status" data-testid="assets-status">Loading app assets...</div>
           <button type="button" id="assets-retry" class="panel-button ghost" hidden>Retry</button>
         </div>
       </div>
@@ -92,7 +92,7 @@
           </div>
           <div id="jump-links" class="jump-links"></div>
         </section>
-        <div class="empty-state" id="empty-state">
+        <div class="empty-state" id="empty-state" data-testid="empty-state">
           <div class="empty-state__title">Nothing rendered yet</div>
           <div class="empty-state__body">Select one or more objects from the panel to render embeds.</div>
         </div>

@@ -6,7 +6,6 @@ const LANGUAGE_OPTIONS = [
   { value: "de", label: "German" },
   { value: "it", label: "Italian" },
   { value: "pt", label: "Portuguese" },
-  { value: "pt-BR", label: "Portuguese (Brazil)" },
   { value: "nl", label: "Dutch" },
   { value: "sv", label: "Swedish" },
   { value: "ru", label: "Russian" },
@@ -48,7 +47,7 @@ const UI_DEFINITIONS = [
     label: "classic/app",
     ui: "classic/app",
     kind: "sheet",
-    supports: { theme: true, identity: true, language: true, interactions: false, preview: false },
+    supports: { theme: true, identity: true, language: true, interactions: false, preview: false, bookmarkId: true, clearSelections: true, select: true },
   },
   {
     id: "analyticssheet",
@@ -69,7 +68,7 @@ const UI_DEFINITIONS = [
     label: "analytics/chart",
     ui: "analytics/chart",
     kind: "object",
-    supports: { theme: true, identity: true, language: false, interactions: true, preview: true },
+    supports: { theme: true, identity: true, language: false, interactions: true, preview: true, overrideProperties: true },
   },
 ];
 
@@ -80,7 +79,11 @@ const DEFAULT_CONFIG = {
   identity: "",
   preview: false,
   iframe: false,
-  interactions: { active: true, passive: true, select: true },
+  interactions: { active: true, passive: true, select: true, edit: true },
+  bookmarkId: "",
+  clearSelections: false,
+  select: "",
+  overrideProperties: "",
 };
 const DEFAULT_CONFIG_COLLAPSED = true;
 
@@ -197,6 +200,21 @@ function compactConfig(config, itemId) {
   if (config.interactions.select !== DEFAULT_CONFIG.interactions.select) {
     compact.is = config.interactions.select;
   }
+  if (config.interactions.edit !== DEFAULT_CONFIG.interactions.edit) {
+    compact.ie = config.interactions.edit;
+  }
+  if (config.bookmarkId !== DEFAULT_CONFIG.bookmarkId) {
+    compact.bm = config.bookmarkId;
+  }
+  if (config.clearSelections !== DEFAULT_CONFIG.clearSelections) {
+    compact.cs = config.clearSelections;
+  }
+  if (config.select !== DEFAULT_CONFIG.select) {
+    compact.sl = config.select;
+  }
+  if (config.overrideProperties !== DEFAULT_CONFIG.overrideProperties) {
+    compact.op = config.overrideProperties;
+  }
   return compact;
 }
 
@@ -208,6 +226,10 @@ function expandConfig(compact, existing) {
     preview: existing.preview,
     iframe: existing.iframe,
     interactions: { ...existing.interactions },
+    bookmarkId: existing.bookmarkId,
+    clearSelections: existing.clearSelections,
+    select: existing.select,
+    overrideProperties: existing.overrideProperties,
   };
 
   if (Object.prototype.hasOwnProperty.call(compact, "t")) {
@@ -233,6 +255,21 @@ function expandConfig(compact, existing) {
   }
   if (Object.prototype.hasOwnProperty.call(compact, "is")) {
     merged.interactions.select = Boolean(compact.is);
+  }
+  if (Object.prototype.hasOwnProperty.call(compact, "ie")) {
+    merged.interactions.edit = Boolean(compact.ie);
+  }
+  if (Object.prototype.hasOwnProperty.call(compact, "bm")) {
+    merged.bookmarkId = compact.bm;
+  }
+  if (Object.prototype.hasOwnProperty.call(compact, "cs")) {
+    merged.clearSelections = Boolean(compact.cs);
+  }
+  if (Object.prototype.hasOwnProperty.call(compact, "sl")) {
+    merged.select = compact.sl;
+  }
+  if (Object.prototype.hasOwnProperty.call(compact, "op")) {
+    merged.overrideProperties = compact.op;
   }
 
   return merged;
@@ -648,6 +685,10 @@ function getItemConfig(itemId) {
       preview: getDefaultPreviewForItemId(itemId),
       iframe: DEFAULT_CONFIG.iframe,
       interactions: { ...DEFAULT_CONFIG.interactions },
+      bookmarkId: DEFAULT_CONFIG.bookmarkId,
+      clearSelections: DEFAULT_CONFIG.clearSelections,
+      select: DEFAULT_CONFIG.select,
+      overrideProperties: DEFAULT_CONFIG.overrideProperties,
     });
   }
   return state.configs.get(itemId);
@@ -722,6 +763,7 @@ function renderSectionsList() {
 
     const sectionWrapper = document.createElement("div");
     sectionWrapper.className = "section-group";
+    sectionWrapper.setAttribute("data-testid", `picker-section-${section.id}`);
     if (state.collapsedSections.has(section.id)) {
       sectionWrapper.classList.add("is-collapsed");
     }
@@ -893,6 +935,7 @@ function renderSelectedItems() {
 function buildEmbedCard(item) {
   const card = document.createElement("div");
   card.className = "embed-card";
+  card.setAttribute("data-testid", "embed-card");
   card.dataset.itemId = item.id;
   card.id = `render-${toDomId(item.id)}`;
 
@@ -927,6 +970,7 @@ function buildEmbedCard(item) {
 
   const embedWrapper = document.createElement("div");
   embedWrapper.className = "embed-card__body";
+  embedWrapper.setAttribute("data-testid", "embed-body");
   embedWrapper.dataset.ui = item.ui;
   embedWrapper.appendChild(createEmbedNode(item));
 
@@ -1050,6 +1094,18 @@ function createEmbedNode(item) {
     const context = { interactions };
     embed.setAttribute("context___json", JSON.stringify(context));
   }
+  if (config.bookmarkId && supportsParam(item.ui, "bookmarkId")) {
+    embed.setAttribute("bookmark-id", config.bookmarkId);
+  }
+  if (config.clearSelections && supportsParam(item.ui, "clearSelections")) {
+    embed.setAttribute("clear-selections", "true");
+  }
+  if (config.select && supportsParam(item.ui, "select")) {
+    embed.setAttribute("select", config.select);
+  }
+  if (config.overrideProperties && supportsParam(item.ui, "overrideProperties")) {
+    embed.setAttribute("override-properties___json", config.overrideProperties);
+  }
 
   return embed;
 }
@@ -1155,6 +1211,42 @@ function renderConfigPanel() {
     );
   }
 
+  if (supportsParam(item.ui, "bookmarkId")) {
+    dom.configPanelBody.appendChild(
+      buildTextControl("Bookmark ID", "bookmark-id", config.bookmarkId, (value) => {
+        config.bookmarkId = value;
+        onItemConfigChanged(item.id);
+      }),
+    );
+  }
+
+  if (supportsParam(item.ui, "clearSelections")) {
+    dom.configPanelBody.appendChild(
+      buildToggleControl("Clear selections", "clear-selections", config.clearSelections, (value) => {
+        config.clearSelections = value;
+        onItemConfigChanged(item.id);
+      }),
+    );
+  }
+
+  if (supportsParam(item.ui, "select")) {
+    dom.configPanelBody.appendChild(
+      buildTextControl("Select (JSON)", "select", config.select, (value) => {
+        config.select = value;
+        onItemConfigChanged(item.id);
+      }, "Optional", '[{"field":"Dim1","values":["A","B"]}]'),
+    );
+  }
+
+  if (supportsParam(item.ui, "overrideProperties")) {
+    dom.configPanelBody.appendChild(
+      buildTextControl("Override properties (JSON)", "override-properties___json", config.overrideProperties, (value) => {
+        config.overrideProperties = value;
+        onItemConfigChanged(item.id);
+      }, "Optional", '{"title":{"qText":"Custom Title"}}'),
+    );
+  }
+
   if (supportsParam(item.ui, "interactions")) {
     dom.configPanelBody.appendChild(
       buildToggleControl("Interactions: active", "interactions-active", config.interactions.active, (value) => {
@@ -1171,6 +1263,12 @@ function renderConfigPanel() {
     dom.configPanelBody.appendChild(
       buildToggleControl("Interactions: select", "interactions-select", config.interactions.select, (value) => {
         config.interactions.select = value;
+        onItemConfigChanged(item.id);
+      }),
+    );
+    dom.configPanelBody.appendChild(
+      buildToggleControl("Interactions: edit", "interactions-edit", config.interactions.edit, (value) => {
+        config.interactions.edit = value;
         onItemConfigChanged(item.id);
       }),
     );
@@ -1221,6 +1319,10 @@ function applyConfigToRenderedUiType(sourceItemId) {
         interactions: sourceDefinition?.supports?.interactions
           ? { ...sourceConfig.interactions }
           : { ...targetConfig.interactions },
+        bookmarkId: sourceDefinition?.supports?.bookmarkId ? sourceConfig.bookmarkId : targetConfig.bookmarkId,
+        clearSelections: sourceDefinition?.supports?.clearSelections ? sourceConfig.clearSelections : targetConfig.clearSelections,
+        select: sourceDefinition?.supports?.select ? sourceConfig.select : targetConfig.select,
+        overrideProperties: sourceDefinition?.supports?.overrideProperties ? sourceConfig.overrideProperties : targetConfig.overrideProperties,
       };
 
       state.configs.set(targetId, {
@@ -1248,7 +1350,7 @@ function buildSelectControl(label, name, value, options, onChange) {
   return wrapper;
 }
 
-function buildTextControl(label, name, value, onChange) {
+function buildTextControl(label, name, value, onChange, placeholder = "Optional", example = null) {
   const wrapper = document.createElement("label");
   wrapper.className = "config-control";
   const title = document.createElement("span");
@@ -1256,11 +1358,25 @@ function buildTextControl(label, name, value, onChange) {
   const input = document.createElement("input");
   input.name = name;
   input.type = "text";
-  input.placeholder = "Optional";
+  input.placeholder = placeholder;
   input.value = value;
   input.addEventListener("input", (event) => onChange(event.target.value));
   wrapper.appendChild(title);
   wrapper.appendChild(input);
+  if (example) {
+    const exampleEl = document.createElement("div");
+    exampleEl.className = "config-example";
+    exampleEl.appendChild(document.createTextNode("e.g. "));
+    const code = document.createElement("code");
+    code.textContent = example;
+    code.title = "Click to copy";
+    code.addEventListener("click", (event) => {
+      event.preventDefault();
+      navigator.clipboard.writeText(example);
+    });
+    exampleEl.appendChild(code);
+    wrapper.appendChild(exampleEl);
+  }
   return wrapper;
 }
 
