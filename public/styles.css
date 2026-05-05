@@ -428,6 +428,21 @@ html {
   gap: 8px;
 }
 
+.config-example {
+  font-size: 11px;
+  color: var(--text-secondary, #666);
+}
+
+.config-example code {
+  font-family: monospace;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.config-example code:hover {
+  color: var(--text-primary, #000);
+}
+
 .config-apply-row {
   display: flex;
   flex-direction: column;
